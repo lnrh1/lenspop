@@ -1,0 +1,480 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using LensPop;
+
+namespace LensPopTests
+{
+    static class Harness
+    {
+        static StringBuilder Log = new StringBuilder();
+
+        static void Line(string s) { Log.AppendLine(s); Console.WriteLine(s); }
+
+        [STAThread]
+        static int Main(string[] args)
+        {
+            foreach (string a in args) if (a == "--ui") { UiShots.Run(); return 0; }
+            try
+            {
+                TestUi();
+                TestThinking();
+                TestParseLines();
+                TestSearch();
+                TestCompose();
+                MockServer.Run();
+                TestApi().Wait();
+            }
+            catch (Exception e)
+            {
+                Line("!!! 失败：" + e);
+                return 1;
+            }
+            File.WriteAllText("dist\\test-report.txt", Log.ToString(), new UTF8Encoding(false));
+            return 0;
+        }
+
+        static void TestUi()
+        {
+            Line("== 界面构造 ==");
+            var cfg = AppConfig.Load();
+            cfg.Normalize();
+            try
+            {
+                using (var f0 = new Form()) Line("  裸 Form ok");
+            }
+            catch (Exception e) { Line("  裸 Form 失败：" + e.Message); }
+            try
+            {
+                using (var f = new PopupForm()) Line("  PopupForm ok " + f.Width + "x" + f.Height);
+            }
+            catch (Exception e) { Line("  PopupForm 失败：" + e.GetType().Name + " " + e.Message + " @ " + e.StackTrace); }
+            try
+            {
+                using (var f = new SettingsForm(cfg)) Line("  SettingsForm ok");
+            }
+            catch (Exception e) { Line("  SettingsForm 失败：" + e.Message + " @ " + e.StackTrace); }
+            try
+            {
+                using (var f = new BusyForm("测试", new Point(100, 100))) Line("  BusyForm ok");
+            }
+            catch (Exception e) { Line("  BusyForm 失败：" + e.Message); }
+        }
+
+        static void TestThinking()
+        {
+            Line("== 思考档位 ==");
+            var cases = new string[][]
+            {
+                new string[] { "deepseek", "deepseek-flash" },
+                new string[] { "kimi", "kimi-k3-1-pro" },
+                new string[] { "zhipu", "glm-5.3" },
+                new string[] { "zhipu", "glm-4.6" },
+                new string[] { "dashscope", "qwen3-max" },
+                new string[] { "openai", "gpt-5" },
+                new string[] { "openrouter", "openai/gpt-4o" }
+            };
+            foreach (var c in cases)
+            {
+                var fam = Thinking.Get(c[0], c[1]);
+                var lv = Thinking.LevelsFor(c[0], c[1]);
+                Line("  " + c[1] + " -> " + fam.Label + " [" + string.Join("/", lv.ToArray()) + "] 关思考参数=" + Json(Thinking.Disable(c[0], c[1])));
+            }
+            Line("  deepseek 询问档位 high = " + Json(Thinking.Build("deepseek", "deepseek-flash", "high")));
+            Line("  deepseek 询问档位 off  = " + Json(Thinking.Build("deepseek", "deepseek-flash", "off")));
+        }
+
+        static void TestParseLines()
+        {
+            Line("== 布局 JSON 解析 ==");
+            string raw = "好的，结果如下：\n" + new string((char)96, 3) + "json\n" +
+                "{\"width\":900,\"height\":500,\"lines\":[" +
+                "{\"box\":[40,60,320,34],\"color\":\"#1f3a8a\",\"text\":\"Hello world\",\"translation\":\"你好，世界\"}," +
+                "{\"box\":[40,140,420,30],\"color\":\"#223344\",\"text\":\"This is a longer English sentence that needs shrinking\",\"translation\":\"这是一句更长的英文句子，翻译之后需要自动缩小字号才能塞进原来的位置\"}" +
+                "]}" + new string((char)96, 3);
+            int lw, lh;
+            var lines = ImageTools.ParseLines(raw, out lw, out lh);
+            Line("  图片尺寸=" + lw + "x" + lh + "，行数=" + lines.Count);
+            foreach (var l in lines) Line("   - box=" + l.X + "," + l.Y + "," + l.W + "," + l.H + " color=" + l.Color + " 原文=" + l.Text + " 译文=" + l.Translation);
+        }
+
+        static void TestSearch()
+        {
+            Line("== 搜索 ==");
+            var s = new Settings();
+            s.SearchEngine = "bing";
+            Line("  bing: " + SearchEngines.BuildUrl(s, "划词 翻译"));
+            s.SearchEngine = "custom";
+            s.SearchUrlTpl = "https://example.com/find?kw=%s";
+            Line("  custom: " + SearchEngines.BuildUrl(s, "a b&c"));
+        }
+
+        static void TestCompose()
+        {
+            Line("== 图片排版（就地替换） ==");
+            var src = new Bitmap(900, 500);
+            using (var g = Graphics.FromImage(src))
+            {
+                g.Clear(Color.FromArgb(246, 247, 249));
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                using (var f1 = new Font("Segoe UI", 22f, FontStyle.Bold))
+                using (var f2 = new Font("Segoe UI", 15f))
+                using (var b1 = new SolidBrush(Color.FromArgb(31, 58, 138)))
+                using (var b2 = new SolidBrush(Color.FromArgb(34, 51, 68)))
+                {
+                    g.DrawString("Hello world", f1, b1, 40, 60);
+                    g.DrawString("This is a longer English sentence that needs shrinking", f2, b2, 40, 140);
+                }
+                using (var pen = new Pen(Color.FromArgb(220, 222, 228)))
+                    g.DrawLine(pen, 40, 200, 860, 200);
+            }
+
+            string raw = "{\"width\":900,\"height\":500,\"lines\":[" +
+                "{\"box\":[40,58,320,38],\"color\":\"#1f3a8a\",\"text\":\"Hello world\",\"translation\":\"你好，世界\"}," +
+                "{\"box\":[40,138,420,32],\"color\":\"#223344\",\"text\":\"This is a longer English sentence that needs shrinking\",\"translation\":\"这是一句更长的英文句子，翻译之后需要自动缩小字号才能塞进原来的位置\"}" +
+                "]}";
+            int lw, lh;
+            var lines = ImageTools.ParseLines(raw, out lw, out lh);
+            var outBmp = ImageTools.Compose(src, lines, lw, lh);
+            outBmp.Save("dist\\test-compose.png", System.Drawing.Imaging.ImageFormat.Png);
+            Line("  已输出 dist\\test-compose.png（900x500）");
+            src.Dispose();
+            outBmp.Dispose();
+        }
+
+        static async Task Probe()
+        {
+            Line("== 原始 POST 探测 ==");
+            string url = "http://127.0.0.1:" + MockServer.Port + "/v1/chat/completions";
+            var req = (HttpWebRequest)WebRequest.Create(url);
+            req.Method = "POST";
+            req.ContentType = "application/json; charset=utf-8";
+            req.Timeout = 15000;
+            req.ReadWriteTimeout = 15000;
+            req.AllowReadStreamBuffering = false;
+            req.ServicePoint.Expect100Continue = false;
+            byte[] data = Encoding.UTF8.GetBytes("{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":true}");
+            req.ContentLength = data.Length;
+            Line("  -> 取请求流");
+            using (var rs = await req.GetRequestStreamAsync())
+            {
+                Line("  -> 拿到请求流，写入");
+                await rs.WriteAsync(data, 0, data.Length);
+            }
+            Line("  -> 写完了，等响应");
+            var resp = (HttpWebResponse)await req.GetResponseAsync();
+            Line("  -> 响应 " + (int)resp.StatusCode + " " + resp.ContentType);
+            using (var sr = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
+            {
+                string l;
+                while ((l = await sr.ReadLineAsync()) != null) Line("     SSE| " + l);
+            }
+            Line("  -> 流结束");
+        }
+
+        static async Task TestApi()
+        {
+            Line("== API 客户端（本地假服务） ==");
+            await Probe();
+            string baseUrl = "http://127.0.0.1:" + MockServer.Port + "/v1";
+            try
+            {
+                var models = await Api.ListModelsAsync(baseUrl, "test-key", 15);
+                Line("  /models 返回 " + models.Count + " 个：" + string.Join(", ", models.ToArray()));
+            }
+            catch (Exception e)
+            {
+                Line("  /models 失败：" + e.Message);
+            }
+
+            var t = new Target();
+            t.BaseUrl = baseUrl;
+            t.ApiKey = "test-key";
+            t.Model = "mock-model";
+            t.PresetId = "deepseek";
+            t.ProviderName = "Mock";
+
+            Api.Trace = delegate(string m) { Line("    [api] " + m); };
+
+            var msgs = new List<ChatMsg>();
+            msgs.Add(new ChatMsg("system", "你是翻译引擎"));
+            msgs.Add(new ChatMsg("user", "Hello"));
+
+            var sb = new StringBuilder();
+            Line("  开始流式调用…");
+            string text = await Api.ChatAsync(t, msgs, Thinking.Disable("deepseek", "mock-model"), true,
+                delegate(string d) { sb.Append(d); }, 30, 0.3, 0);
+            Line("  流式返回结束");
+            Line("  流式结果：" + text);
+            Line("  onDelta 累计：" + sb.ToString());
+
+            string once = await Api.ChatAsync(t, msgs, new Dictionary<string, object>(), false, null, 30, 0.3, 0);
+            Line("  非流式结果：" + once);
+        }
+
+        static string Json(object o)
+        {
+            var ser = new System.Web.Script.Serialization.JavaScriptSerializer();
+            return ser.Serialize(o);
+        }
+    }
+
+    /// <summary>把几个窗口依次显示并截图，用于人工核对界面（需要交互桌面会话）</summary>
+    static class UiShots
+    {
+        static readonly List<Action> Steps = new List<Action>();
+        static int _index;
+        static string _outDir;
+        static Form _current;
+
+        public static void Run()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            _outDir = Path.Combine(Environment.CurrentDirectory, "dev", "shots");
+            Directory.CreateDirectory(_outDir);
+
+            var cfg = AppConfig.Load();
+            cfg.Normalize();
+            var t = new Target();
+            t.ProviderId = "demo";
+            t.PresetId = "deepseek";
+            t.ProviderName = "DeepSeek";
+            t.Model = "deepseek-flash";
+            t.BaseUrl = "https://api.deepseek.com/v1";
+
+            Steps.Add(delegate
+            {
+                var f = new SettingsForm(cfg);
+                Shot(f, "01-settings.png", 1200);
+            });
+            Steps.Add(delegate
+            {
+                var f = new ResultForm(cfg, t, ResultMode.Ask, "The quick brown fox jumps over the lazy dog. 这行字是怎么翻译的？");
+                f.Shown += delegate
+                {
+                    f.SetPlain("▸ 这行英文在说什么？\n\n这是一句常见的英文练习句：那只敏捷的棕色狐狸跳过了懒狗。\n\n它本身没有特殊含义，主要用来展示字母表里的全部 26 个字母。");
+                    f.SetStatusText("输入问题，Enter 发送");
+                };
+                Shot(f, "02-ask.png", 1300);
+            });
+            Steps.Add(delegate
+            {
+                var f = new ResultForm(cfg, t, ResultMode.Text, "In-place translation：只擦掉原来那一行字，用原文字色写回译文。\n\n模型给的框比原文窄时，会先按原文字号量出真实宽度，把多出来的原文一起擦掉。");
+                f.TitleText = "翻译 → 中文（简体）";
+                Shot(f, "03-translate.png", 1300);
+            });
+            Steps.Add(delegate
+            {
+                var img = new Bitmap(Path.Combine(_outDir, "..", "..", "docs", "example-image-translate.png"));
+                var lines = new List<TextLine>();
+                var f = new ImageResultForm(img, lines, "DeepSeek · deepseek-flash");
+                Shot(f, "04-image.png", 1300);
+            });
+            Steps.Add(delegate
+            {
+                var f = new PopupForm();
+                f.ShowAt(new Point(520, 460), "demo");
+                _current = f;
+                var tm = new System.Windows.Forms.Timer();
+                tm.Interval = 1000;
+                tm.Tick += delegate
+                {
+                    tm.Stop();
+                    var r = f.Bounds;
+                    r.Inflate(70, 70);
+                    TakeShot(r, "05-popup.png");
+                    f.Close();
+                    Next();
+                };
+                tm.Start();
+            });
+            Steps.Add(delegate
+            {
+                Application.Exit();
+            });
+            Next();
+            Application.Run();
+        }
+
+        static void Shot(Form f, string file, int delayMs)
+        {
+            _current = f;
+            if (f.StartPosition != FormStartPosition.Manual)
+            {
+                f.StartPosition = FormStartPosition.Manual;
+                f.Location = new Point(120, 90);
+            }
+            f.TopMost = true;
+            f.Show();
+            f.Activate();
+            f.BringToFront();
+            var tm = new System.Windows.Forms.Timer();
+            tm.Interval = delayMs;
+            tm.Tick += delegate
+            {
+                tm.Stop();
+                TakeShot(f.Bounds, file);
+                f.Close();
+                Next();
+            };
+            tm.Start();
+        }
+
+        static void Next()
+        {
+            int i = _index++;
+            if (i >= Steps.Count) return;
+            Steps[i]();
+        }
+
+        static void TakeShot(Rectangle bounds, string file)
+        {
+            try
+            {
+                var bmp = new Bitmap(Math.Max(1, bounds.Width), Math.Max(1, bounds.Height));
+                using (var g = Graphics.FromImage(bmp))
+                    g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, new Size(bounds.Width, bounds.Height));
+                bmp.Save(Path.Combine(_outDir, file), System.Drawing.Imaging.ImageFormat.Png);
+                bmp.Dispose();
+                Console.WriteLine("shot: " + file);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("shot failed " + file + ": " + e.Message);
+            }
+        }
+    }
+
+    /// <summary>手写 HTTP 假服务：验证 /models 与 SSE 聊天</summary>
+    static class MockServer
+    {
+        public static int Port = 0;
+        static TcpListener _listener;
+
+        public static void Run()
+        {
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            var th = new Thread(Loop);
+            th.IsBackground = true;
+            th.Start();
+        }
+
+        static void Loop()
+        {
+            while (true)
+            {
+                try
+                {
+                    var client = _listener.AcceptTcpClient();
+                    Console.WriteLine("[mock] accepted");
+                    var th = new Thread(delegate() { Handle(client); });
+                    th.IsBackground = true;
+                    th.Start();
+                }
+                catch (Exception e) { Console.WriteLine("[mock] accept loop ended: " + e.Message); return; }
+            }
+        }
+
+        static void Handle(TcpClient client)
+        {
+            try
+            {
+                using (client)
+                using (var ns = client.GetStream())
+                {
+                    var head = new List<byte>();
+                    var one = new byte[1];
+                    while (true)
+                    {
+                        int n = ns.Read(one, 0, 1);
+                        if (n <= 0) return;
+                        head.Add(one[0]);
+                        int c = head.Count;
+                        if (c >= 4 && head[c - 4] == 13 && head[c - 3] == 10 && head[c - 2] == 13 && head[c - 1] == 10) break;
+                    }
+                    string headerText = Encoding.UTF8.GetString(head.ToArray());
+                    string[] lines = headerText.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+                    if (lines.Length == 0) return;
+                    string first = lines[0];
+                    Console.WriteLine("[mock] REQ " + first);
+
+                    int contentLength = 0;
+                    for (int i = 1; i < lines.Length; i++)
+                    {
+                        int c = lines[i].IndexOf(':');
+                        if (c > 0 && lines[i].Substring(0, c).Trim().ToLowerInvariant() == "content-length")
+                            int.TryParse(lines[i].Substring(c + 1).Trim(), out contentLength);
+                    }
+
+                    var bodyBytes = new List<byte>();
+                    int need = contentLength;
+                    var buf = new byte[4096];
+                    while (need > 0)
+                    {
+                        int n = ns.Read(buf, 0, Math.Min(buf.Length, need));
+                        if (n <= 0) break;
+                        for (int i = 0; i < n; i++) bodyBytes.Add(buf[i]);
+                        need -= n;
+                    }
+                    string reqBody = Encoding.UTF8.GetString(bodyBytes.ToArray());
+
+                    bool stream = reqBody.IndexOf("\"stream\":true") >= 0;
+                    string path = first.Split(' ')[1];
+
+                    if (path.EndsWith("/models"))
+                    {
+                        string json = "{\"object\":\"list\",\"data\":[" +
+                            "{\"id\":\"mock-flash\",\"object\":\"model\"}," +
+                            "{\"id\":\"mock-vl-4v\",\"object\":\"model\"}," +
+                            "{\"id\":\"mock-large\",\"object\":\"model\"}]}";
+                        Write(ns, "application/json", Encoding.UTF8.GetBytes(json));
+                    }
+                    else if (stream)
+                    {
+                        var headBytes = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n");
+                        ns.Write(headBytes, 0, headBytes.Length);
+                        string[] parts = new string[] { "你好", "，", "世界", "。" };
+                        foreach (string p in parts)
+                        {
+                            string chunk = "data: {\"choices\":[{\"delta\":{\"content\":\"" + p + "\"}}]}\n\n";
+                            var bytes = Encoding.UTF8.GetBytes(chunk);
+                            ns.Write(bytes, 0, bytes.Length);
+                            ns.Flush();
+                            Thread.Sleep(10);
+                        }
+                        var done = Encoding.UTF8.GetBytes("data: [DONE]\n\n");
+                        ns.Write(done, 0, done.Length);
+                        ns.Flush();
+                    }
+                    else
+                    {
+                        string json = "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"非流式你好\"}}]}";
+                        Write(ns, "application/json", Encoding.UTF8.GetBytes(json));
+                    }
+                }
+            }
+            catch (Exception e) { Console.WriteLine("[mock] handle error: " + e.Message); }
+        }
+
+        static void Write(NetworkStream ns, string ctype, byte[] body)
+        {
+            string head = "HTTP/1.1 200 OK\r\nContent-Type: " + ctype + "\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n";
+            byte[] hb = Encoding.ASCII.GetBytes(head);
+            ns.Write(hb, 0, hb.Length);
+            ns.Write(body, 0, body.Length);
+            ns.Flush();
+        }
+    }
+}
