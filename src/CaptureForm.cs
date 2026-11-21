@@ -22,6 +22,27 @@ namespace LensPop
         Point _start;
         Rectangle _sel;
 
+        [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);
+        [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+        [DllImport("gdi32.dll")] static extern int GetDeviceCaps(IntPtr hdc, int index);
+
+        const int DESKTOPHORZRES = 118;
+        const int DESKTOPVERTRES = 117;
+
+        static Size PhysicalScreen()
+        {
+            try
+            {
+                IntPtr dc = GetDC(IntPtr.Zero);
+                int w = GetDeviceCaps(dc, DESKTOPHORZRES);
+                int h = GetDeviceCaps(dc, DESKTOPVERTRES);
+                ReleaseDC(IntPtr.Zero, dc);
+                if (w > 0 && h > 0) return new Size(w, h);
+            }
+            catch { }
+            return Size.Empty;
+        }
+
         static int AppliedDpi()
         {
             try
@@ -56,10 +77,11 @@ namespace LensPop
             catch { }
             if (ownDpi <= 96)
             {
-                float k = AppliedDpi() / 96f;
-                if (k > 1.01f)
-                    _physical = new Size((int)Math.Round(_bounds.Width * k), (int)Math.Round(_bounds.Height * k));
+                Size phys = PhysicalScreen();
+                if (phys.Width > _bounds.Width + 8 || phys.Height > _bounds.Height + 8)
+                    _physical = phys;
             }
+            Program.LogLine("遮罩初始化 虚拟=" + _bounds + " 物理=" + (_physical.IsEmpty ? "同虚拟" : _physical.ToString()) + " ownDpi=" + ownDpi);
 
             Bounds = _bounds;
             Grab();
@@ -83,14 +105,37 @@ namespace LensPop
                 RECT r;
                 if (!GetWindowRect(Handle, out r)) return;
                 int w = r.Right - r.Left;
+                Program.LogLine("遮罩窗口实际=" + w + "x" + (r.Bottom - r.Top) + " 目标=" + _physical.Width + "x" + _physical.Height);
                 if (w >= _physical.Width - 8) return;   // 系统已经按 DPI 放大过，不用管
 
                 _bounds = new Rectangle(0, 0, _physical.Width, _physical.Height);
                 Bounds = _bounds;
+                RECT r2; if (GetWindowRect(Handle, out r2)) Program.LogLine("遮罩调整后=" + (r2.Right - r2.Left) + "x" + (r2.Bottom - r2.Top));
                 Grab();
                 Invalidate();
             }
             catch { }
+        }
+
+        const int WM_GETMINMAXINFO = 0x0024;
+
+        // 进程 DPI 不感知时，Windows 会把窗口最大尺寸限制在虚拟屏幕大小；这里放开到物理分辨率
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_GETMINMAXINFO && _physical.Width > 0)
+            {
+                try
+                {
+                    // MINMAXINFO: ptReserved(0), ptMaxSize(8), ptMaxPosition(16), ptMinTrackSize(24), ptMaxTrackSize(32)
+                    int[] buf = new int[10];
+                    System.Runtime.InteropServices.Marshal.Copy(m.LParam, buf, 0, 10);
+                    buf[8] = _physical.Width;
+                    buf[9] = _physical.Height;
+                    System.Runtime.InteropServices.Marshal.Copy(buf, 0, m.LParam, 10);
+                }
+                catch { }
+            }
+            base.WndProc(ref m);
         }
 
         protected override void OnPaint(PaintEventArgs e)

@@ -34,6 +34,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--uia") return UiaTest.Run();
             foreach (string a in args) if (a == "--capture") return CaptureShot.Run();
             foreach (string a in args) if (a == "--screen") return ScreenInfo.Run();
+            foreach (string a in args) if (a == "--screenshot") return ScreenShot.Run();
             try
             {
                 TestImageEncode();
@@ -807,6 +808,23 @@ namespace LensPopTests
         }
     }
 
+    /// <summary>DPI 感知视角截图（--screenshot）</summary>
+    static class ScreenShot
+    {
+        public static int Run()
+        {
+            var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            var shot = new System.Drawing.Bitmap(b.Width, b.Height);
+            using (var g = System.Drawing.Graphics.FromImage(shot)) g.CopyFromScreen(b.X, b.Y, 0, 0, b.Size);
+            string dir = System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots");
+            System.IO.Directory.CreateDirectory(dir);
+            string file = System.IO.Path.Combine(dir, "full.png");
+            shot.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+            shot.Dispose();
+            Console.WriteLine("saved " + file + " " + b.Width + "x" + b.Height);
+            return 0;
+        }
+    }
     /// <summary>手写 HTTP 假服务：验证 /models 与 SSE 聊天</summary>
     static class MockServer
     {
