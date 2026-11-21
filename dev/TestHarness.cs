@@ -31,6 +31,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--shell") return ShellTest.Run();
             foreach (string a in args) if (a == "--sendto") return SendToTest.Run();
             foreach (string a in args) if (a == "--ui-provider") return ProviderSwitchTest.Run();
+            foreach (string a in args) if (a == "--uia") return UiaTest.Run();
             try
             {
                 TestImageEncode();
@@ -712,6 +713,36 @@ namespace LensPopTests
             t2.Start();
             System.Threading.Thread.Sleep(6000);
             return 0;
+        }
+    }
+
+
+    /// <summary>UIA 取词自测：文本框里选中一段，用 UI Automation 读回来（--uia）</summary>
+    static class UiaTest
+    {
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var f = new Form();
+            f.Size = new System.Drawing.Size(460, 260);
+            f.StartPosition = FormStartPosition.CenterScreen;
+            var box = new System.Windows.Forms.TextBox();
+            box.Multiline = true;
+            box.Dock = System.Windows.Forms.DockStyle.Fill;
+            box.Text = "UI Automation fallback test: 选区能不能直接读到。";
+            f.Controls.Add(box);
+            f.Show();
+            f.Activate();
+            box.Focus();
+            box.Select(0, 18);
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(300);
+            Application.DoEvents();
+
+            string got = LensPop.UiaGrab.TryGetSelection(800);
+            Console.WriteLine("UIA 结果: " + (string.IsNullOrEmpty(got) ? "(空)" : got));
+            f.Close();
+            return string.IsNullOrEmpty(got) ? 1 : 0;
         }
     }
 

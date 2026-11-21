@@ -7,6 +7,9 @@ if not exist "%CSC%" (
   echo [x] csc.exe not found - .NET Framework 4.x required
   exit /b 1
 )
+set WPF=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\WPF
+if not exist "%WPF%\UIAutomationClient.dll" set WPF=%WINDIR%\Microsoft.NET\Framework\v4.0.30319\WPF
+
 if not exist dist mkdir dist
 
 "%CSC%" -nologo -target:winexe -optimize+ -platform:anycpu ^
@@ -18,6 +21,9 @@ if not exist dist mkdir dist
   -r:System.Drawing.dll ^
   -r:System.Windows.Forms.dll ^
   -r:System.Web.Extensions.dll ^
+  -r:"%WPF%\UIAutomationClient.dll" ^
+  -r:"%WPF%\UIAutomationTypes.dll" ^
+  -r:"%WPF%\WindowsBase.dll" ^
   src\Config.cs ^
   src\Providers.cs ^
   src\Thinking.cs ^
@@ -30,6 +36,7 @@ if not exist dist mkdir dist
   src\SettingsForm.cs ^
   src\ImageTools.cs ^
   src\GrabTestForm.cs ^
+  src\UiaGrab.cs ^
   src\MainForm.cs ^
   src\MouseHook.cs ^
   src\HotkeyHost.cs ^

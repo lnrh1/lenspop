@@ -190,24 +190,70 @@ namespace LensPop
         }
     }
 
-    /// <summary>用 Ctrl+C 把当前选中文本抓出来（在独立 STA 线程里做，避免卡 UI）</summary>
+    /// <summary>用 Ctrl+C 把当前选中文本抓出来</summary>
     public static class SelectionGrabber
     {
-        [DllImport("user32.dll")]
-        static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
 
-        const byte VK_CONTROL = 0x11;
-        const byte VK_C = 0x43;
-        const uint KEYUP = 0x0002;
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
+        struct INPUT
+        {
+            [System.Runtime.InteropServices.FieldOffset(0)] public uint type;
+            [System.Runtime.InteropServices.FieldOffset(8)] public KEYBDINPUT ki;
+            [System.Runtime.InteropServices.FieldOffset(8)] public MOUSEINPUT mi;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        static extern uint SendInput(uint n, INPUT[] inputs, int size);
+
+        const uint INPUT_KEYBOARD = 1;
+        const ushort VK_CONTROL = 0x11;
+        const ushort VK_C = 0x43;
+        const uint KEYEVENTF_KEYUP = 0x0002;
+
+        static void SendCtrlC()
+        {
+            var arr = new INPUT[4];
+            int size = System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT));
+
+            arr[0].type = INPUT_KEYBOARD;
+            arr[0].ki.wVk = VK_CONTROL;
+            arr[1].type = INPUT_KEYBOARD;
+            arr[1].ki.wVk = VK_C;
+            arr[2].type = INPUT_KEYBOARD;
+            arr[2].ki.wVk = VK_C;
+            arr[2].ki.dwFlags = KEYEVENTF_KEYUP;
+            arr[3].type = INPUT_KEYBOARD;
+            arr[3].ki.wVk = VK_CONTROL;
+            arr[3].ki.dwFlags = KEYEVENTF_KEYUP;
+
+            uint r = SendInput(4, arr, size);
+            if (r == 0)
+                Program.LogLine("SendInput 失败 err=" + System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+        }
 
         /// <summary>
-        /// 在 UI 线程上取词：用于「取词测试」这种目标窗口就是自己的场景。
-        /// 在后台线程里对自己的窗口发 Ctrl+C 会明显延迟（消息要等目标线程处理），所以这里就地泵消息。
-        /// </summary>
-        /// <summary>
-        /// Grab the selected text on the UI thread.
-        /// Two attempts with a settle delay: browsers/Electron apps need a few ms after
-        /// mouse-up before Ctrl+C actually copies the finished selection.
+        /// 划词主路径：不再预写“哨兵”值（浏览器/Electron 在剪贴板刚被动过时会放弃复制），
+        /// 改成「读旧值 → 发 Ctrl+C → 等变化；第二次仍未变化就直接采用剪贴板内容」。
         /// </summary>
         public static string GrabOnUiThread(int timeoutMs)
         {
@@ -215,38 +261,17 @@ namespace LensPop
             try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
             catch { before = null; }
 
-            string marker = "lenspop-" + Guid.NewGuid().ToString("N");
-
             for (int attempt = 0; attempt < 2; attempt++)
             {
-                if (attempt == 0)
+                int settle = attempt == 0 ? 45 : 120;
+                var sw0 = System.Diagnostics.Stopwatch.StartNew();
+                while (sw0.ElapsedMilliseconds < settle)
                 {
-                    // let the source app finish the selection before we press Ctrl+C
-                    var settle = System.Diagnostics.Stopwatch.StartNew();
-                    while (settle.ElapsedMilliseconds < 45)
-                    {
-                        Application.DoEvents();
-                        System.Threading.Thread.Sleep(5);
-                    }
-                }
-                else
-                {
-                    Program.LogLine("grab(ui): 第1次没取到，重试");
-                    var settle2 = System.Diagnostics.Stopwatch.StartNew();
-                    while (settle2.ElapsedMilliseconds < 120)
-                    {
-                        Application.DoEvents();
-                        System.Threading.Thread.Sleep(5);
-                    }
+                    Application.DoEvents();
+                    System.Threading.Thread.Sleep(5);
                 }
 
-                try { Clipboard.SetText(marker); }
-                catch (Exception ex) { Program.LogLine("grab(ui): 写哨兵失败 " + ex.Message); }
-
-                keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
-                keybd_event(VK_C, 0, 0, UIntPtr.Zero);
-                keybd_event(VK_C, 0, KEYUP, UIntPtr.Zero);
-                keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
+                SendCtrlC();
 
                 int waitMs = attempt == 0 ? 400 : 550;
                 var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -258,71 +283,40 @@ namespace LensPop
                     {
                         if (!Clipboard.ContainsText()) continue;
                         string now = Clipboard.GetText();
-                        if (string.IsNullOrEmpty(now) || now == marker) continue;
+                        if (string.IsNullOrEmpty(now)) continue;
+                        if (attempt == 0 && before != null && now == before) continue;
                         Program.LogLine("grab(ui): 成功 " + now.Length + " 字（第" + (attempt + 1) + "次）");
                         return now;
                     }
                     catch { }
                 }
+                Program.LogLine("grab(ui): 第" + (attempt + 1) + "次没取到");
             }
 
-            Program.LogLine("grab(ui): 两次都超时失败");
-            try { if (before != null) Clipboard.SetText(before); } catch { }
+            Program.LogLine("grab(ui): 剪贴板两次都失败，改用 UI Automation");
+            string uia = UiaGrab.TryGetSelection(600);
+            if (!string.IsNullOrEmpty(uia))
+            {
+                Program.LogLine("grab(uia): 成功 " + uia.Length + " 字");
+                return uia;
+            }
+            Program.LogLine("grab(ui): 全部失败");
             return null;
         }
 
         public static string Grab(int timeoutMs)
         {
             string result = null;
-            var t = new Thread(delegate()
+            var t = new System.Threading.Thread(delegate()
             {
-                try { result = GrabOnSta(timeoutMs); }
+                try { result = GrabOnUiThread(timeoutMs); }
                 catch { result = null; }
             });
-            t.SetApartmentState(ApartmentState.STA);
+            t.SetApartmentState(System.Threading.ApartmentState.STA);
             t.IsBackground = true;
             t.Start();
-            t.Join(timeoutMs + 800);
+            t.Join(timeoutMs + 1500);
             return result;
-        }
-
-        static string GrabOnSta(int timeoutMs)
-        {
-            Program.LogLine("grab: 开始（" + timeoutMs + "ms）");
-            string before = null;
-            try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
-            catch { before = null; }
-
-            // 先塞一个哨兵：这样即使选中的文字和剪贴板里原来的一样，也能判断 Ctrl+C 到底有没有生效
-            string marker = "\u0001lenspop-" + Guid.NewGuid().ToString("N");
-            try { Clipboard.SetText(marker); Program.LogLine("grab: 哨兵 ok"); }
-            catch (Exception ex) { Program.LogLine("grab: 哨兵失败 " + ex.Message); }
-
-            keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
-            keybd_event(VK_C, 0, 0, UIntPtr.Zero);
-            keybd_event(VK_C, 0, KEYUP, UIntPtr.Zero);
-            keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
-            Program.LogLine("grab: 已发送 Ctrl+C");
-
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < timeoutMs)
-            {
-                Thread.Sleep(25);
-                try
-                {
-                    if (!Clipboard.ContainsText()) continue;
-                    string now = Clipboard.GetText();
-                    if (string.IsNullOrEmpty(now) || now == marker) continue;
-                    Program.LogLine("grab: 成功 " + now.Length + " 字");
-                    return now;
-                }
-                catch (Exception ex) { Program.LogLine("grab: 读剪贴板异常 " + ex.Message); }
-            }
-
-            Program.LogLine("grab: 超时失败");
-            // 没成功：尽量把原剪贴板恢复回去
-            try { if (before != null) Clipboard.SetText(before); } catch { }
-            return null;
         }
     }
 }
