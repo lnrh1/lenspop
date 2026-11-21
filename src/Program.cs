@@ -442,6 +442,8 @@ namespace LensPop
                 _popup.SettingsClicked += delegate { OpenSettings(); };
             }
             _popup.ShowAt(pt, text);
+            Program.LogLine("弹层位置 " + _popup.Bounds.X + "," + _popup.Bounds.Y + " 尺寸 " +
+                _popup.Width + "x" + _popup.Height + " 可见=" + _popup.Visible);
         }
 
         void HidePopup()

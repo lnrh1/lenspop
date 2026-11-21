@@ -1004,7 +1004,24 @@ namespace LensPop
             else
             {
                 string why2 = ShellMenu.RegisterError == null ? "未知原因" : ShellMenu.RegisterError;
-                MessageBox.Show(this, "两种方式都失败了：\r\n" + why + "\r\n" + why2, "注册失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                string regPath = null;
+                try { regPath = ShellMenu.WriteRegFile(); } catch (Exception ex) { why2 += "\r\n写 .reg 也失败：" + ex.Message; }
+
+                if (regPath != null)
+                {
+                    MessageBox.Show(this,
+                        "本程序没有写注册表的权限（多半是被安全软件或受限账户拦了）：\r\n" + why + "\r\n" + why2 + "\r\n\r\n" +
+                        "已经生成一个注册表文件，**双击导入**就行（导入是资源管理器执行的，不受这个限制）：\r\n" + regPath + "\r\n\r\n" +
+                        "导入后：图片右键 →「显示更多选项」→ LensPop 识别文字 / 翻译图片。\r\n" +
+                        "路径已经复制到剪贴板。",
+                        "改用 .reg 导入", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    try { Clipboard.SetText(regPath); } catch { }
+                    try { System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + regPath + "\""); } catch { }
+                }
+                else
+                {
+                    MessageBox.Show(this, "注册失败：\r\n" + why + "\r\n" + why2, "注册失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
         }
 
@@ -1121,6 +1138,7 @@ namespace LensPop
             sb.AppendLine("前台是本程序: " + (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id) ? "是" : "否"));
             sb.AppendLine("注册表菜单  : " + (ShellMenu.IsRegistered() ? "已注册" : "未注册"));
             sb.AppendLine("发送到菜单  : " + (ShellMenu.SendToRegistered() ? "已添加" : "无"));
+            sb.AppendLine("当前进程可写注册表: " + (CanWriteRegistry() ? "可以" : "不行（会给出 .reg 导入方案）"));
             sb.AppendLine("进程路径    : " + System.Windows.Forms.Application.ExecutablePath);
             sb.AppendLine("启动时间    : " + System.Diagnostics.Process.GetCurrentProcess().StartTime.ToString("yyyy-MM-dd HH:mm:ss"));
             uint mods;
@@ -1136,6 +1154,20 @@ namespace LensPop
             sb.AppendLine("已保存到：" + path);
             MessageBox.Show(this, sb.ToString(), "自检结果", MessageBoxButtons.OK, MessageBoxIcon.Information);
             SetStatusText("自检完成");
+        }
+
+        static bool CanWriteRegistry()
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes\LensPopWriteProbe"))
+                {
+                    if (k == null) return false;
+                }
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\Classes\LensPopWriteProbe", false);
+                return true;
+            }
+            catch { return false; }
         }
 
         string RoleName(string role)

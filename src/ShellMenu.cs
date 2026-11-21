@@ -195,6 +195,38 @@ namespace LensPop
             catch { }
         }
 
+        /* ---------------- 生成 .reg 文件（绕开进程权限） ---------------- */
+
+        static void RegVerb(System.Text.StringBuilder sb, string keyPath, string title, string arg)
+        {
+            string exe = ExePath.Replace("\\", "\\\\");
+            sb.AppendLine("[HKEY_CURRENT_USER\\Software\\Classes\\" + keyPath + "]");
+            sb.AppendLine("@=\"" + title + "\"");
+            sb.AppendLine("\"Icon\"=\"" + exe + ",0\"");
+            sb.AppendLine();
+            sb.AppendLine("[HKEY_CURRENT_USER\\Software\\Classes\\" + keyPath + "\\command]");
+            sb.AppendLine("@=\"\\\"" + exe + "\\\" " + arg + " \\\"%1\\\"\"");
+            sb.AppendLine();
+        }
+
+        /// <summary>写一份 .reg 到配置目录：双击导入即可，导入动作由资源管理器执行，不受本进程权限限制</summary>
+        public static string WriteRegFile()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Windows Registry Editor Version 5.00");
+            sb.AppendLine();
+            RegVerb(sb, @"SystemFileAssociations\image\shell\LensPopOCR", "LensPop 识别文字", "--ocr");
+            RegVerb(sb, @"SystemFileAssociations\image\shell\LensPopTranslate", "LensPop 翻译图片", "--translate");
+            foreach (string ext in Exts)
+            {
+                RegVerb(sb, @"SystemFileAssociations\" + ext + @"\shell\LensPopOCR", "LensPop 识别文字", "--ocr");
+                RegVerb(sb, @"SystemFileAssociations\" + ext + @"\shell\LensPopTranslate", "LensPop 翻译图片", "--translate");
+            }
+            string path = System.IO.Path.Combine(AppConfig.Dir, "LensPop-右键菜单.reg");
+            System.IO.File.WriteAllText(path, sb.ToString(), new System.Text.UnicodeEncoding(false, true));
+            return path;
+        }
+
         public static bool IsRegistered()
         {
             try
