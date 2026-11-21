@@ -182,23 +182,82 @@ namespace LensPop
             return sb.ToString();
         }
 
+        /// <summary>找一个确定可写的目录做默认保存位置（Pictures 可能被 OneDrive 重定向或不可写）</summary>
+        static string DefaultSaveDir()
+        {
+            string[] candidates = new string[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                System.IO.Path.GetTempPath()
+            };
+            foreach (string c in candidates)
+            {
+                if (string.IsNullOrEmpty(c)) continue;
+                try
+                {
+                    if (!System.IO.Directory.Exists(c)) continue;
+                    string probe = System.IO.Path.Combine(c, ".lenspop-write-test");
+                    System.IO.File.WriteAllText(probe, "x");
+                    System.IO.File.Delete(probe);
+                    return c;
+                }
+                catch { }
+            }
+            return System.IO.Path.GetTempPath();
+        }
+
+        static readonly string _nl = System.Environment.NewLine;
+
         void SaveImage()
         {
             var dlg = new SaveFileDialog();
             dlg.Filter = "PNG 图片|*.png";
             dlg.FileName = "lenspop-translated-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".png";
+            dlg.OverwritePrompt = true;
+            dlg.RestoreDirectory = true;
+            string dir = DefaultSaveDir();
+            try { if (System.IO.Directory.Exists(dir)) dlg.InitialDirectory = dir; } catch { }
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            if (TrySave(dlg.FileName)) { _status.Text = "已保存"; return; }
+
+            // 目标不可写：退回到应用自己的目录，并告诉用户实际位置
+            string fallbackDir = System.IO.Path.Combine(AppConfig.Dir, "exports");
+            string fallback = System.IO.Path.Combine(fallbackDir, System.IO.Path.GetFileName(dlg.FileName));
             try
             {
-                _image.Save(dlg.FileName, System.Drawing.Imaging.ImageFormat.Png);
-                _status.Text = "已保存";
+                System.IO.Directory.CreateDirectory(fallbackDir);
+                if (TrySave(fallback))
+                {
+                    _status.Text = "已保存到 " + fallback;
+                    var r = MessageBox.Show(this,
+                        "原路径没有写入权限：" + _nl + dlg.FileName + _nl + _nl +
+                        "已改为保存到：" + _nl + fallback + _nl + _nl + "要打开所在文件夹吗？",
+                        "保存位置已调整", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                    if (r == DialogResult.Yes)
+                    {
+                        try { System.Diagnostics.Process.Start("explorer.exe", "/select," + fallback); } catch { }
+                    }
+                    return;
+                }
             }
-            catch (Exception e)
-            {
-                MessageBox.Show("保存失败：" + e.Message);
-            }
+            catch { }
+
+            MessageBox.Show(this, "保存失败，请换一个位置再试。", "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
+        bool TrySave(string path)
+        {
+            try
+            {
+                using (var fs = new System.IO.FileStream(path, System.IO.FileMode.Create, System.IO.FileAccess.Write, System.IO.FileShare.None))
+                    _image.Save(fs, System.Drawing.Imaging.ImageFormat.Png);
+                return true;
+            }
+            catch { return false; }
+        }
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);

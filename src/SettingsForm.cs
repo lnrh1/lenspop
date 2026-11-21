@@ -1089,6 +1089,8 @@ namespace LensPop
                 }
                 var dlg = new SaveFileDialog();
                 dlg.Filter = "LensPop 配置|*.json";
+                dlg.RestoreDirectory = true;
+                dlg.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
                 dlg.FileName = "lenspop-config-" + DateTime.Now.ToString("yyyyMMdd") + ".json";
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 File.Copy(AppConfig.FilePath, dlg.FileName, true);
