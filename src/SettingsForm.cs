@@ -47,7 +47,7 @@ namespace LensPop
         CheckBox _autostart;
         Button _shellBtn;
         Label _shellStatus;
-        TextBox _hkOcr, _hkCapture, _hkTranslate;
+        TextBox _hkCapture, _hkTranslate, _hkShot;
         Label _status;
 
         public SettingsForm(AppConfig cfg)
@@ -425,9 +425,9 @@ namespace LensPop
             _shellBtn.Click += delegate { ToggleShell(); };
             _shellStatus = Hint(p, "", 232, 58, 480, 20);
 
-            L(p, "识别剪贴板图片", 14, 96, 110);
-            _hkOcr = T(p, 200, 92, 130, false);
-            Hint(p, "例如 Ctrl+Alt+O", 340, 96, 160, 20);
+            L(p, "截图（复制/提取/翻译）", 14, 96, 150);
+            _hkShot = T(p, 200, 92, 130, false);
+            Hint(p, "例如 Ctrl+Alt+A", 340, 96, 300, 20);
 
             L(p, "截图识别", 14, 128, 110);
             _hkCapture = T(p, 200, 124, 130, false);
@@ -954,7 +954,7 @@ namespace LensPop
             _timeout.Value = Math.Max(10, Math.Min(600, s.TimeoutSec));
             _selPopup.Checked = s.SelectionPopup;
             _stream.Checked = s.Stream;
-            _hkOcr.Text = s.HotkeyOcr;
+            _hkShot.Text = s.HotkeyShot;
             _hkCapture.Text = s.HotkeyCapture;
             _hkTranslate.Text = s.HotkeyTranslate;
             _autostart.Checked = IsAutostart();
@@ -1158,8 +1158,8 @@ namespace LensPop
             sb.AppendLine("启动时间    : " + System.Diagnostics.Process.GetCurrentProcess().StartTime.ToString("yyyy-MM-dd HH:mm:ss"));
             uint mods;
             uint vk;
-            sb.AppendLine("识别热键    : " + (_hkOcr.Text.Trim().Length == 0 ? "未设置" : (_hkOcr.Text + " " + (HotkeyHost.Parse(_hkOcr.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
-            sb.AppendLine("截图热键    : " + (_hkCapture.Text.Trim().Length == 0 ? "未设置" : (_hkCapture.Text + " " + (HotkeyHost.Parse(_hkCapture.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
+            sb.AppendLine("截图热键    : " + (_hkShot.Text.Trim().Length == 0 ? "未设置" : (_hkShot.Text + " " + (HotkeyHost.Parse(_hkShot.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
+            sb.AppendLine("截图识别热键: " + (_hkCapture.Text.Trim().Length == 0 ? "未设置" : (_hkCapture.Text + " " + (HotkeyHost.Parse(_hkCapture.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
             sb.AppendLine("提供商      : " + _cfg.Providers.Count + " 个 / 模型池 " + _cfg.Pool.Count + " 个");
             sb.AppendLine("角色        : 翻译=" + RoleName("translate") + " OCR=" + RoleName("ocr") + " 询问=" + RoleName("ask"));
 
@@ -1251,13 +1251,13 @@ namespace LensPop
             // 热键
             uint mods;
             uint vk;
-            string hk = _hkOcr.Text.Trim();
-            if (hk.Length > 0 && !HotkeyHost.Parse(hk, out mods, out vk))
+            string hshot = _hkShot.Text.Trim();
+            if (hshot.Length > 0 && !HotkeyHost.Parse(hshot, out mods, out vk))
             {
-                _status.Text = "识别热键格式不对：" + hk;
+                _status.Text = "截图热键格式不对：" + hshot;
                 return false;
             }
-            s.HotkeyOcr = hk;
+            s.HotkeyShot = hshot;
             string hc = _hkCapture.Text.Trim();
             if (hc.Length > 0 && !HotkeyHost.Parse(hc, out mods, out vk))
             {

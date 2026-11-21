@@ -515,14 +515,11 @@ namespace LensPop
             m.Items.Add(pop);
             m.Items.Add(new ToolStripSeparator());
 
-            string hkOcr = string.IsNullOrEmpty(_cfg.Settings.HotkeyOcr) ? "" : "（" + _cfg.Settings.HotkeyOcr + "）";
             string hkCap = string.IsNullOrEmpty(_cfg.Settings.HotkeyCapture) ? "" : "（" + _cfg.Settings.HotkeyCapture + "）";
 
             string hkT = string.IsNullOrEmpty(_cfg.Settings.HotkeyTranslate) ? "" : "（" + _cfg.Settings.HotkeyTranslate + "）";
             m.Items.Add("翻译选中文字" + hkT, null, delegate { TranslateSelection(); });
             m.Items.Add(new ToolStripSeparator());
-            m.Items.Add("识别剪贴板图片" + hkOcr, null, delegate { OcrClipboard(); });
-            m.Items.Add("翻译剪贴板图片", null, delegate { TranslateClipboard(); });
             m.Items.Add("截图（复制 / 提取 / 翻译）", null, delegate { ShotCapture(); });
             m.Items.Add("截图识别" + hkCap, null, delegate { Capture(false); });
             m.Items.Add("截图翻译", null, delegate { Capture(true); });
@@ -568,8 +565,6 @@ namespace LensPop
         void RegisterHotkeys()
         {
             _hotkeys.UnregisterAll();
-            string hk = _cfg.Settings.HotkeyOcr;
-            if (!string.IsNullOrEmpty(hk)) _hotkeys.Register(hk, delegate { OcrClipboard(); });
             string hc = _cfg.Settings.HotkeyCapture;
             if (!string.IsNullOrEmpty(hc)) _hotkeys.Register(hc, delegate { Capture(false); });
             string ht = _cfg.Settings.HotkeyTranslate;
@@ -876,29 +871,9 @@ namespace LensPop
             OpenTranslate(text.Trim());
         }
 
-        public void OcrClipboard()
-        {
-            var bmp = ClipboardImage();
-            if (bmp == null)
-            {
-                Program.Info("剪贴板里没有图片。可以先截图（Win+Shift+S）或者复制一张图。");
-                return;
-            }
-            _cfg = AppConfig.Load();
-            ImageWorkflow.Ocr(_cfg, bmp, Cursor.Position, Program.Info, null);
-        }
 
-        void TranslateClipboard()
-        {
-            var bmp = ClipboardImage();
-            if (bmp == null)
-            {
-                Program.Info("剪贴板里没有图片。");
-                return;
-            }
-            _cfg = AppConfig.Load();
-            ImageWorkflow.Translate(_cfg, bmp, Cursor.Position, null);
-        }
+
+
 
         public void Capture(bool translate)
         {

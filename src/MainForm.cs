@@ -43,7 +43,7 @@ namespace LensPop
 
             int y = 236;
             AddButton("设置…", 18, y, 96, delegate { _app.OpenSettings(); });
-            AddButton("识别剪贴板图片", 122, y, 120, delegate { _app.OcrClipboard(); });
+            AddButton("截图", 122, y, 120, delegate { _app.ShotCapture(); });
             AddButton("截图识别", 250, y, 84, delegate { _app.CaptureScreen(false); });
             AddButton("退出", 342, y, 80, delegate { _app.Quit(); });
 
