@@ -47,7 +47,7 @@ namespace LensPop
                 using (var pen = new Pen(Color.FromArgb(79, 70, 229), 2))
                     g.DrawRectangle(pen, _sel.Left, _sel.Top, _sel.Width, _sel.Height);
                 string label = _sel.Width + " × " + _sel.Height;
-                using (var f = Theme.UISmall)
+                var f = Theme.UISmall;          // 共享字体，绝对不能 Dispose
                 using (var b = new SolidBrush(Color.FromArgb(16, 19, 26)))
                 {
                     SizeF sz = g.MeasureString(label, f);

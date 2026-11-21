@@ -32,6 +32,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--sendto") return SendToTest.Run();
             foreach (string a in args) if (a == "--ui-provider") return ProviderSwitchTest.Run();
             foreach (string a in args) if (a == "--uia") return UiaTest.Run();
+            foreach (string a in args) if (a == "--capture") return CaptureShot.Run();
             try
             {
                 TestImageEncode();
@@ -743,6 +744,32 @@ namespace LensPopTests
             Console.WriteLine("UIA 结果: " + (string.IsNullOrEmpty(got) ? "(空)" : got));
             f.Close();
             return string.IsNullOrEmpty(got) ? 1 : 0;
+        }
+    }
+
+
+    /// <summary>截图遮罩自测：显示 CaptureForm 并截屏，检查是否还有红叉（--capture）</summary>
+    static class CaptureShot
+    {
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var f = new LensPop.CaptureForm(delegate(System.Drawing.Bitmap b, System.Drawing.Point p) { if (b != null) b.Dispose(); });
+            f.Show();
+            var until = DateTime.Now.AddMilliseconds(1200);
+            while (DateTime.Now < until) { Application.DoEvents(); System.Threading.Thread.Sleep(30); }
+
+            var scr = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            var shot = new System.Drawing.Bitmap(scr.Width, scr.Height);
+            using (var g = System.Drawing.Graphics.FromImage(shot))
+                g.CopyFromScreen(scr.X, scr.Y, 0, 0, scr.Size);
+            string dir = System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots");
+            System.IO.Directory.CreateDirectory(dir);
+            shot.Save(System.IO.Path.Combine(dir, "capture.png"), System.Drawing.Imaging.ImageFormat.Png);
+            shot.Dispose();
+            f.Close();
+            Console.WriteLine("capture shot saved");
+            return 0;
         }
     }
 

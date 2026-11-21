@@ -38,9 +38,9 @@ namespace LensPop
             root.ColumnCount = 1;
             root.RowCount = 3;
             root.BackColor = Theme.Bg;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             Controls.Add(root);
 
             /* 头部 */
@@ -103,7 +103,7 @@ namespace LensPop
             var body = new Panel();
             body.Dock = DockStyle.Fill;
             body.BackColor = Theme.Panel;
-            body.Padding = new Padding(12);
+            body.Padding = new Padding(14);
             root.Controls.Add(body, 0, 1);
 
             _pic.Dock = DockStyle.Fill;

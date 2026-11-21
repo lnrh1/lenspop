@@ -60,6 +60,8 @@ namespace LensPop
             b.UseVisualStyleBackColor = false;
             b.FlatAppearance.BorderSize = primary ? 0 : 1;
             b.FlatAppearance.BorderColor = Line;
+            b.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(91, 82, 236) : BrandSoft;
+            b.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(67, 56, 202) : Color.FromArgb(224, 231, 255);
             b.BackColor = primary ? Brand : Bg;
             b.ForeColor = primary ? Color.White : Fg;
             b.Height = 28;

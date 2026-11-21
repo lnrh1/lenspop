@@ -54,8 +54,8 @@ namespace LensPop
         {
             _cfg = cfg;
             Text = "LensPop 设置";
-            Width = 800;
-            Height = 620;
+            Width = 830;
+            Height = 660;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.Bg;
             Font = Theme.UI;
@@ -150,7 +150,7 @@ namespace LensPop
 
             var bottom = new Panel();
             bottom.Dock = DockStyle.Bottom;
-            bottom.Height = 46;
+            bottom.Height = 54;
             bottom.BackColor = Theme.Panel;
             Controls.Add(bottom);
 

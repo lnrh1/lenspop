@@ -74,10 +74,10 @@ namespace LensPop
             root.RowCount = 4;
             root.BackColor = Theme.Bg;
             root.Padding = new Padding(0);
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, _mode == ResultMode.Ask ? 64 : 0));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
             Controls.Add(root);
 
             /* 头部 */
@@ -88,6 +88,8 @@ namespace LensPop
             {
                 using (var pen = new Pen(Theme.Line))
                     e.Graphics.DrawLine(pen, 0, head.Height - 1, head.Width, head.Height - 1);
+                using (var accent = new SolidBrush(Theme.Brand))
+                    e.Graphics.FillRectangle(accent, 0, 0, 3, head.Height - 1);
             };
             root.Controls.Add(head, 0, 0);
 
@@ -108,7 +110,7 @@ namespace LensPop
             _title.ForeColor = Theme.Fg;
             _title.Dock = DockStyle.Fill;
             _title.TextAlign = ContentAlignment.MiddleLeft;
-            _title.Padding = new Padding(14, 0, 0, 0);
+            _title.Padding = new Padding(18, 0, 0, 0);
             _title.AutoEllipsis = true;
             headGrid.Controls.Add(_title, 0, 0);
 
@@ -149,7 +151,7 @@ namespace LensPop
             var body = new Panel();
             body.Dock = DockStyle.Fill;
             body.BackColor = Theme.Bg;
-            body.Padding = new Padding(12, 8, 12, 6);
+            body.Padding = new Padding(16, 12, 16, 8);
             root.Controls.Add(body, 0, 1);
 
             _rtb.Dock = DockStyle.Fill;
