@@ -24,6 +24,7 @@ namespace LensPop
 
             if (!string.IsNullOrEmpty(ocrPath)) { RunFile(ocrPath, false); return; }
             if (!string.IsNullOrEmpty(transPath)) { RunFile(transPath, true); return; }
+            if (HasFlag(args, "--shot")) { RunShot(); return; }
             if (HasFlag(args, "--settings"))
             {
                 new SettingsForm(AppConfig.Load()).ShowDialog();
@@ -144,6 +145,16 @@ namespace LensPop
             return false;
         }
 
+        static void RunShot()
+        {
+            var f = new CaptureForm(delegate(Bitmap b, Point p)
+            {
+                try { Clipboard.SetImage(b); } catch { }
+                MessageBox.Show("已复制 " + b.Width + "x" + b.Height + " 的截图", "LensPop");
+            });
+            f.Show();
+            Application.Run();
+        }
         static void RunFile(string path, bool translate)
         {
             var cfg = AppConfig.Load();
@@ -195,6 +206,8 @@ namespace LensPop
         readonly HotkeyHost _hotkeys = new HotkeyHost();
         readonly Form _invoker = new Form();
         PopupForm _popup;
+        ShotBarForm _shotbar;
+        Bitmap _lastShot;
         MainForm _main;
         AppConfig _cfg;
         ContextMenuStrip _menu;
@@ -406,6 +419,7 @@ namespace LensPop
             };
             trayFix2.Start();
 
+            try { var sc0 = Screen.PrimaryScreen.Bounds; var vr0 = SystemInformation.VirtualScreen; int dp0 = 96; using (var g0 = Graphics.FromHwnd(IntPtr.Zero)) dp0 = (int)g0.DpiX; Program.LogLine("屏幕=" + sc0.Width + "x" + sc0.Height + " 虚拟=" + vr0.Width + "x" + vr0.Height + " dpi=" + dp0); } catch { }
             Program.LogLine("托盘就绪 pid=" + System.Diagnostics.Process.GetCurrentProcess().Id +
                 " 图标可见=" + _tray.Visible + " 管理员=" + Program.IsAdmin());
 
@@ -509,6 +523,7 @@ namespace LensPop
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add("识别剪贴板图片" + hkOcr, null, delegate { OcrClipboard(); });
             m.Items.Add("翻译剪贴板图片", null, delegate { TranslateClipboard(); });
+            m.Items.Add("截图（复制 / 提取 / 翻译）", null, delegate { ShotCapture(); });
             m.Items.Add("截图识别" + hkCap, null, delegate { Capture(false); });
             m.Items.Add("截图翻译", null, delegate { Capture(true); });
             m.Items.Add(new ToolStripSeparator());
@@ -559,6 +574,8 @@ namespace LensPop
             if (!string.IsNullOrEmpty(hc)) _hotkeys.Register(hc, delegate { Capture(false); });
             string ht = _cfg.Settings.HotkeyTranslate;
             if (!string.IsNullOrEmpty(ht)) _hotkeys.Register(ht, delegate { TranslateSelection(); });
+            string hs = _cfg.Settings.HotkeyShot;
+            if (!string.IsNullOrEmpty(hs)) _hotkeys.Register(hs, delegate { ShotCapture(); });
         }
 
         public AppConfig Config { get { return _cfg; } }
@@ -607,6 +624,33 @@ namespace LensPop
             using (var f = new GrabTestForm()) f.ShowDialog(_main != null && _main.Visible ? _main : null);
         }
 
+        public void ShotCapture()
+        {
+            HidePopup();
+            _cfg = AppConfig.Load();
+            var f = new CaptureForm(delegate(Bitmap bmp, Point at)
+            {
+                try { Clipboard.SetImage(bmp); } catch { }
+                if (_lastShot != null) { try { _lastShot.Dispose(); } catch { } }
+                _lastShot = bmp;
+                ShowShotBar(at);
+            });
+            f.Show();
+            f.Activate();
+        }
+
+        void ShowShotBar(Point at)
+        {
+            if (_shotbar == null || _shotbar.IsDisposed)
+            {
+                _shotbar = new ShotBarForm();
+                _shotbar.CopyClicked += delegate { try { if (_lastShot != null) Clipboard.SetImage(_lastShot); } catch { } };
+                _shotbar.OcrClicked += delegate { if (_lastShot != null) ImageWorkflow.Ocr(_cfg, (Bitmap)_lastShot.Clone(), Cursor.Position, Program.Info, null); };
+                _shotbar.TranslateClicked += delegate { if (_lastShot != null) ImageWorkflow.Translate(_cfg, (Bitmap)_lastShot.Clone(), Cursor.Position, null); };
+            }
+            _shotbar.ShowAt(at, "已复制到剪贴板");
+            Program.LogLine("截图完成 已复制 " + (_lastShot == null ? "" : _lastShot.Width + "x" + _lastShot.Height));
+        }
         public void CaptureScreen(bool translate)
         {
             Capture(translate);

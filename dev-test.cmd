@@ -13,7 +13,7 @@ if not exist dist mkdir dist
   -r:"%WPF%\UIAutomationClient.dll" -r:"%WPF%\UIAutomationTypes.dll" -r:"%WPF%\WindowsBase.dll" ^
   src\Config.cs src\Providers.cs src\Thinking.cs src\Api.cs src\SearchEngines.cs ^
   src\Theme.cs src\PopupForm.cs src\ResultForm.cs src\ImageResultForm.cs src\SettingsForm.cs ^
-  src\ImageTools.cs src\GrabTestForm.cs src\UiaGrab.cs src\MainForm.cs src\MouseHook.cs src\HotkeyHost.cs src\CaptureForm.cs src\ShellMenu.cs src\Program.cs ^
+  src\ImageTools.cs src\GrabTestForm.cs src\ShotBar.cs src\UiaGrab.cs src\MainForm.cs src\MouseHook.cs src\HotkeyHost.cs src\CaptureForm.cs src\ShellMenu.cs src\Program.cs ^
   dev\TestHarness.cs
 if errorlevel 1 (
   echo [x] harness build failed

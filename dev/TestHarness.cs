@@ -33,6 +33,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--ui-provider") return ProviderSwitchTest.Run();
             foreach (string a in args) if (a == "--uia") return UiaTest.Run();
             foreach (string a in args) if (a == "--capture") return CaptureShot.Run();
+            foreach (string a in args) if (a == "--screen") return ScreenInfo.Run();
             try
             {
                 TestImageEncode();
@@ -769,6 +770,39 @@ namespace LensPopTests
             shot.Dispose();
             f.Close();
             Console.WriteLine("capture shot saved");
+            return 0;
+        }
+    }
+
+
+    /// <summary>屏幕/DPI 信息（--screen）</summary>
+    static class ScreenInfo
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern int GetSystemMetrics(int n);
+
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var primary = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            var virt = System.Windows.Forms.SystemInformation.VirtualScreen;
+            Console.WriteLine("PrimaryScreen.Bounds = " + primary);
+            Console.WriteLine("SystemInformation.VirtualScreen = " + virt);
+            Console.WriteLine("GetSystemMetrics SM_CXSCREEN/CY = " + GetSystemMetrics(0) + "x" + GetSystemMetrics(1));
+            Console.WriteLine("ScreenCount = " + System.Windows.Forms.Screen.AllScreens.Length);
+            foreach (var sc in System.Windows.Forms.Screen.AllScreens)
+                Console.WriteLine("  screen " + sc.DeviceName + " bounds=" + sc.Bounds + " working=" + sc.WorkingArea);
+
+            var f = new Form();
+            f.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+            f.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
+            f.Bounds = virt;
+            f.Show();
+            Application.DoEvents();
+            Console.WriteLine("Form.Bounds = " + f.Bounds);
+            using (var g = System.Drawing.Graphics.FromHwnd(f.Handle))
+                Console.WriteLine("Form DpiX/Y = " + g.DpiX + "/" + g.DpiY);
+            f.Close();
             return 0;
         }
     }

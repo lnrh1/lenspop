@@ -46,6 +46,7 @@ namespace LensPop
         public string HotkeyOcr = "Ctrl+Alt+O";
         public string HotkeyCapture = "Ctrl+Alt+S";
         public string HotkeyTranslate = "Ctrl+Alt+T";
+        public string HotkeyShot = "Ctrl+Alt+A";
         public bool Autostart = false;
         public bool ShellMenu = false;
         public Prompts Prompts = new Prompts();
