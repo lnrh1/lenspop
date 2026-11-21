@@ -29,6 +29,7 @@ if not exist dist mkdir dist
   src\ImageResultForm.cs ^
   src\SettingsForm.cs ^
   src\ImageTools.cs ^
+  src\GrabTestForm.cs ^
   src\MouseHook.cs ^
   src\HotkeyHost.cs ^
   src\CaptureForm.cs ^

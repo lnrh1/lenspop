@@ -183,6 +183,46 @@ namespace LensPop
         const byte VK_C = 0x43;
         const uint KEYUP = 0x0002;
 
+        /// <summary>
+        /// 在 UI 线程上取词：用于「取词测试」这种目标窗口就是自己的场景。
+        /// 在后台线程里对自己的窗口发 Ctrl+C 会明显延迟（消息要等目标线程处理），所以这里就地泵消息。
+        /// </summary>
+        public static string GrabOnUiThread(int timeoutMs)
+        {
+            string before = null;
+            try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
+            catch { before = null; }
+
+            string marker = "\u0001lenspop-" + Guid.NewGuid().ToString("N");
+            try { Clipboard.SetText(marker); }
+            catch (Exception ex) { Program.LogLine("grab(ui): 哨兵失败 " + ex.Message); }
+
+            keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+            keybd_event(VK_C, 0, 0, UIntPtr.Zero);
+            keybd_event(VK_C, 0, KEYUP, UIntPtr.Zero);
+            keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(20);
+                try
+                {
+                    if (!Clipboard.ContainsText()) continue;
+                    string now = Clipboard.GetText();
+                    if (string.IsNullOrEmpty(now) || now == marker) continue;
+                    Program.LogLine("grab(ui): 成功 " + now.Length + " 字");
+                    return now;
+                }
+                catch { }
+            }
+
+            Program.LogLine("grab(ui): 超时失败");
+            try { if (before != null) Clipboard.SetText(before); } catch { }
+            return null;
+        }
+
         public static string Grab(int timeoutMs)
         {
             string result = null;
@@ -200,14 +240,21 @@ namespace LensPop
 
         static string GrabOnSta(int timeoutMs)
         {
+            Program.LogLine("grab: 开始（" + timeoutMs + "ms）");
             string before = null;
             try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
             catch { before = null; }
+
+            // 先塞一个哨兵：这样即使选中的文字和剪贴板里原来的一样，也能判断 Ctrl+C 到底有没有生效
+            string marker = "\u0001lenspop-" + Guid.NewGuid().ToString("N");
+            try { Clipboard.SetText(marker); Program.LogLine("grab: 哨兵 ok"); }
+            catch (Exception ex) { Program.LogLine("grab: 哨兵失败 " + ex.Message); }
 
             keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
             keybd_event(VK_C, 0, 0, UIntPtr.Zero);
             keybd_event(VK_C, 0, KEYUP, UIntPtr.Zero);
             keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
+            Program.LogLine("grab: 已发送 Ctrl+C");
 
             var sw = System.Diagnostics.Stopwatch.StartNew();
             while (sw.ElapsedMilliseconds < timeoutMs)
@@ -217,12 +264,16 @@ namespace LensPop
                 {
                     if (!Clipboard.ContainsText()) continue;
                     string now = Clipboard.GetText();
-                    if (string.IsNullOrEmpty(now)) continue;
-                    if (before != null && now == before) continue;
+                    if (string.IsNullOrEmpty(now) || now == marker) continue;
+                    Program.LogLine("grab: 成功 " + now.Length + " 字");
                     return now;
                 }
-                catch { }
+                catch (Exception ex) { Program.LogLine("grab: 读剪贴板异常 " + ex.Message); }
             }
+
+            Program.LogLine("grab: 超时失败");
+            // 没成功：尽量把原剪贴板恢复回去
+            try { if (before != null) Clipboard.SetText(before); } catch { }
             return null;
         }
     }

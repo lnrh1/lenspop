@@ -26,6 +26,8 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--hook-debug") return HookDebug.Run();
             foreach (string a in args) if (a == "--ui-preset") return PresetTest.Run();
             foreach (string a in args) if (a == "--config") return ConfigTest.Run();
+            foreach (string a in args) if (a == "--grab") return GrabTest.Run();
+            foreach (string a in args) if (a == "--grab-raw") return GrabRaw.Run();
             try
             {
                 TestUi();
@@ -358,6 +360,88 @@ namespace LensPopTests
         }
     }
 
+
+    /// <summary>最小化验证：文本框选中 → 哨兵 → Ctrl+C → 读剪贴板（--grab-raw）</summary>
+    static class GrabRaw
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var f = new Form();
+            f.Size = new System.Drawing.Size(400, 300);
+            var box = new System.Windows.Forms.TextBox();
+            box.Multiline = true;
+            box.Dock = System.Windows.Forms.DockStyle.Fill;
+            box.Text = "选中这段文字再点测试。Hello LensPop raw test.";
+            f.Controls.Add(box);
+            f.Show();
+            f.Activate();
+            box.Focus();
+            box.Select(0, 12);
+            Application.DoEvents();
+            Console.WriteLine("前台是自己=" + LensPop.MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id) + " 选区=" + box.SelectionLength);
+
+            string marker = "\u0001lenspop-raw";
+            try { System.Windows.Forms.Clipboard.SetText(marker); Console.WriteLine("哨兵写入 ok"); }
+            catch (Exception e) { Console.WriteLine("哨兵写入失败: " + e.Message); }
+
+            keybd_event(0x11, 0, 0, UIntPtr.Zero);
+            keybd_event(0x43, 0, 0, UIntPtr.Zero);
+            keybd_event(0x43, 0, 0x0002, UIntPtr.Zero);
+            keybd_event(0x11, 0, 0x0002, UIntPtr.Zero);
+
+            for (int i = 0; i < 20; i++)
+            {
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(50);
+                string now = "";
+                try { if (System.Windows.Forms.Clipboard.ContainsText()) now = System.Windows.Forms.Clipboard.GetText(); }
+                catch (Exception e) { Console.WriteLine("  第" + i + "次读取异常: " + e.Message); continue; }
+                Console.WriteLine("  第" + i + "次: [" + (now.Length > 20 ? now.Substring(0, 20) : now) + "]");
+                if (now.Length > 0 && now != marker) { Console.WriteLine("OK 取到选中文字"); f.Close(); return 0; }
+            }
+            Console.WriteLine("FAIL 一直是哨兵或空");
+            f.Close();
+            return 1;
+        }
+    }
+
+    /// <summary>取词测试窗自测：选中文字 → 跑一次 Grab（--grab）</summary>
+    static class GrabTest
+    {
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            var f = new LensPop.GrabTestForm();
+            f.Show();
+            Application.DoEvents();
+
+            var t = typeof(LensPop.GrabTestForm);
+            var box = (System.Windows.Forms.TextBox)t.GetField("_box", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(f);
+            var outLbl = (System.Windows.Forms.Label)t.GetField("_out", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(f);
+            box.Focus();
+            box.Select(0, 20);
+            Application.DoEvents();
+            Console.WriteLine("选中的长度=" + box.SelectionLength);
+
+            t.GetMethod("RunTest", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(f, null);
+
+            var until = DateTime.Now.AddSeconds(4);
+            while (DateTime.Now < until) { Application.DoEvents(); System.Threading.Thread.Sleep(50); }
+            f.Activate();
+            Console.WriteLine("前台是自己=" + LensPop.MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id));
+            string clip = "";
+            try { if (System.Windows.Forms.Clipboard.ContainsText()) clip = System.Windows.Forms.Clipboard.GetText(); } catch { }
+            Console.WriteLine("剪贴板前30字: " + (clip.Length > 30 ? clip.Substring(0, 30) : clip));
+            Console.WriteLine("结果: " + outLbl.Text);
+            f.Close();
+            return outLbl.Text.StartsWith("取词成功") ? 0 : 1;
+        }
+    }
 
     /// <summary>配置备份/恢复：删掉主配置后应能从 config.bak.json 恢复模型池（--config）</summary>
     static class ConfigTest

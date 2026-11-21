@@ -1025,6 +1025,16 @@ namespace LensPop
 
         void TestGrab()
         {
+            using (var f = new GrabTestForm())
+            {
+                f.ShowDialog(this);
+            }
+            SetStatusText("取词测试完成");
+            return;
+        }
+
+        void TestGrabOld_Unused()
+        {
             SetStatusText("3 秒后模拟 Ctrl+C 取词：请先去别的窗口选中一段文字，保持它在前台…");
             var t = new System.Windows.Forms.Timer();
             t.Interval = 3000;
