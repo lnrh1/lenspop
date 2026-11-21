@@ -14,7 +14,7 @@ if not exist dist mkdir dist
   src\Config.cs src\Providers.cs src\Thinking.cs src\Api.cs src\SearchEngines.cs ^
   src\Theme.cs src\PopupForm.cs src\ResultForm.cs src\ImageResultForm.cs src\SettingsForm.cs ^
   src\ImageTools.cs src\GrabTestForm.cs src\ShotBar.cs src\UiaGrab.cs src\MainForm.cs src\MouseHook.cs src\HotkeyHost.cs src\CaptureForm.cs src\ShellMenu.cs src\Program.cs ^
-  dev\TestHarness.cs
+  dev\TestHarness.cs dev\ShotBarClick.cs
 if errorlevel 1 (
   echo [x] harness build failed
   exit /b 1

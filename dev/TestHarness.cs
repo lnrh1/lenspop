@@ -35,6 +35,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--capture") return CaptureShot.Run();
             foreach (string a in args) if (a == "--screen") return ScreenInfo.Run();
             foreach (string a in args) if (a == "--screenshot") return ScreenShot.Run();
+            foreach (string a in args) if (a == "--shotbar") return ShotBarClick.Run();
             try
             {
                 TestImageEncode();

@@ -25,6 +25,7 @@ namespace LensPop
             if (!string.IsNullOrEmpty(ocrPath)) { RunFile(ocrPath, false); return; }
             if (!string.IsNullOrEmpty(transPath)) { RunFile(transPath, true); return; }
             if (HasFlag(args, "--shot")) { RunShot(); return; }
+            if (HasFlag(args, "--shotbar-demo")) { RunShotBarDemo(); return; }
             if (HasFlag(args, "--settings"))
             {
                 new SettingsForm(AppConfig.Load()).ShowDialog();
@@ -145,6 +146,15 @@ namespace LensPop
             return false;
         }
 
+        static void RunShotBarDemo()
+        {
+            var bar = new ShotBarForm();
+            bar.CopyClicked += delegate { Program.LogLine("demo: 复制触发"); };
+            bar.OcrClicked += delegate { Program.LogLine("demo: 提取文字触发"); };
+            bar.TranslateClicked += delegate { Program.LogLine("demo: 翻译触发"); };
+            bar.ShowAt(new Point(700, 400));
+            Application.Run();
+        }
         static void RunShot()
         {
             var f = new CaptureForm(delegate(Bitmap b, Point p)
@@ -636,15 +646,23 @@ namespace LensPop
 
         void ShowShotBar(Point at)
         {
-            if (_shotbar == null || _shotbar.IsDisposed)
+            if (_shotbar != null && !_shotbar.IsDisposed) { try { _shotbar.Dispose(); } catch { } }
+            var bar = new ShotBarForm();
+            _shotbar = bar;
+            bar.CopyClicked += delegate { try { if (_lastShot != null) Clipboard.SetImage(_lastShot); } catch { } };
+            bar.OcrClicked += delegate { if (_lastShot != null) ImageWorkflow.Ocr(_cfg, (Bitmap)_lastShot.Clone(), Cursor.Position, Program.Info, null); };
+            bar.TranslateClicked += delegate { if (_lastShot != null) ImageWorkflow.Translate(_cfg, (Bitmap)_lastShot.Clone(), Cursor.Position, null); };
+
+            // 等遮罩窗彻底关闭后再显示，避免点击被正在销毁的窗口吃掉
+            var t = new System.Windows.Forms.Timer();
+            t.Interval = 150;
+            t.Tick += delegate
             {
-                _shotbar = new ShotBarForm();
-                _shotbar.CopyClicked += delegate { try { if (_lastShot != null) Clipboard.SetImage(_lastShot); } catch { } };
-                _shotbar.OcrClicked += delegate { if (_lastShot != null) ImageWorkflow.Ocr(_cfg, (Bitmap)_lastShot.Clone(), Cursor.Position, Program.Info, null); };
-                _shotbar.TranslateClicked += delegate { if (_lastShot != null) ImageWorkflow.Translate(_cfg, (Bitmap)_lastShot.Clone(), Cursor.Position, null); };
-            }
-            _shotbar.ShowAt(at, "已复制到剪贴板");
-            Program.LogLine("截图完成 已复制 " + (_lastShot == null ? "" : _lastShot.Width + "x" + _lastShot.Height));
+                t.Stop();
+                t.Dispose();
+                try { bar.ShowAt(at); } catch { }
+            };
+            t.Start();
         }
         public void CaptureScreen(bool translate)
         {
@@ -699,7 +717,18 @@ namespace LensPop
         void OnGlobalClick(Point pt)
         {
             if (_popup == null || !_popup.Visible) return;
-            if (_popup.Bounds.Contains(Cursor.Position)) return;
+            Point at = Cursor.Position;
+            if (_shotbar != null && !_shotbar.IsDisposed && _shotbar.Visible)
+            {
+                if (_shotbar.Bounds.Contains(at))
+                {
+                    int seg = _shotbar.SegmentAt(at);
+                    if (seg >= 0) { _shotbar.Fire(seg); return; }
+                }
+                else _shotbar.Hide();
+            }
+            if (_popup == null || !_popup.Visible) return;
+            if (_popup.Bounds.Contains(at)) return;
             _popup.Hide();
         }
 
