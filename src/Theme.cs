@@ -214,6 +214,35 @@ namespace LensPop
             SetWindowLong(f.Handle, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
         }
 
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [DllImport("user32.dll")] static extern uint GetCurrentThreadId();
+        [DllImport("user32.dll")] static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+
+        /// <summary>把窗口顶到最前：热键唤起时前台锁会挡住 Activate，这里借前台线程的输入队列强行置前</summary>
+        public static void ForceForeground(Form f)
+        {
+            if (f == null || f.IsDisposed) return;
+            try
+            {
+                IntPtr h = f.Handle;
+                IntPtr fg = GetForegroundWindow();
+                uint pid;
+                uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out pid);
+                uint myThread = GetCurrentThreadId();
+                bool attached = false;
+                if (fgThread != 0 && fgThread != myThread) attached = AttachThreadInput(myThread, fgThread, true);
+                f.TopMost = true;
+                BringWindowToTop(h);
+                SetForegroundWindow(h);
+                f.Activate();
+                f.TopMost = false;
+                if (attached) AttachThreadInput(myThread, fgThread, false);
+            }
+            catch { }
+        }
         public static void DragBy(Form f, Control handle)
         {
             Point start = Point.Empty;

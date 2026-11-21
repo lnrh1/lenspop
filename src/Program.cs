@@ -28,7 +28,9 @@ namespace LensPop
             if (HasFlag(args, "--shotbar-demo")) { RunShotBarDemo(); return; }
             if (HasFlag(args, "--settings"))
             {
-                new SettingsForm(AppConfig.Load()).ShowDialog();
+                var sf0 = new SettingsForm(AppConfig.Load());
+                sf0.Shown += delegate { Theme.ForceForeground(sf0); };
+                sf0.ShowDialog();
                 return;
             }
 
@@ -675,8 +677,7 @@ namespace LensPop
             {
                 if (_main == null || _main.IsDisposed) _main = new MainForm(this);
                 _main.Show();
-                _main.Activate();
-                _main.BringToFront();
+                Theme.ForceForeground(_main);
             }
             catch { }
         }
@@ -697,6 +698,7 @@ namespace LensPop
                 using (var f = new SettingsForm(cfg))
                 {
                     Program.LogLine("设置窗已创建，准备 ShowDialog");
+                    f.Shown += delegate { Theme.ForceForeground(f); };
                     f.ShowDialog();
                     Program.LogLine("设置窗已关闭");
                 }
@@ -832,6 +834,7 @@ namespace LensPop
                 return;
             }
             var f = new ResultForm(_cfg, t, ResultMode.Translate, text);
+            f.Shown += delegate { Theme.ForceForeground(f); };
             f.PlaceNear(Cursor.Position);
             f.Show();
         }
@@ -848,6 +851,7 @@ namespace LensPop
                 return;
             }
             var f = new ResultForm(_cfg, t, ResultMode.Ask, text);
+            f.Shown += delegate { Theme.ForceForeground(f); };
             f.PlaceNear(Cursor.Position);
             f.Show();
             f.Activate();

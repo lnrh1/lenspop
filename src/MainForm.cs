@@ -96,6 +96,12 @@ namespace LensPop
             _foot.Text = "配置：" + AppConfig.FilePath;
         }
 
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            Theme.ForceForeground(this);
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             _tick.Stop();

@@ -472,6 +472,12 @@ namespace LensPop
             catch { SetStatus("复制失败"); }
         }
 
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            Theme.ForceForeground(this);
+        }
+
         protected override void OnKeyDown(KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Escape) Close();

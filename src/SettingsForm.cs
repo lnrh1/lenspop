@@ -148,9 +148,8 @@ namespace LensPop
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
-            Program.LogLine("设置窗尺寸 Client=" + ClientSize);
+            Theme.ForceForeground(this);
         }
-
         protected override void OnPaintBackground(PaintEventArgs e)
         {
             base.OnPaintBackground(e);
