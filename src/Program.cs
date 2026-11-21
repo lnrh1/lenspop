@@ -38,14 +38,37 @@ namespace LensPop
             {
                 if (!created)
                 {
-                    // 已经有实例在跑：让它把设置窗弹出来，而不是静默退出
+                    // 已经有实例在跑：先让它把设置窗弹出来
+                    bool signaled = false;
                     try
                     {
-                        using (var ev = EventWaitHandle.OpenExisting("LensPop.OpenSettings")) ev.Set();
+                        using (var ev = EventWaitHandle.OpenExisting("LensPop.OpenSettings"))
+                        {
+                            ev.Set();
+                            signaled = true;
+                        }
                     }
                     catch { }
-                    return;
+
+                    if (signaled)
+                    {
+                        Program.LogLine("检测到已有实例，已通知它打开设置");
+                        return;
+                    }
+
+                    // 通知不到（多半是某个看不见的旧实例占着）：别静默退出，让用户决定
+                    var answer = MessageBox.Show(
+                        "LensPop 已经在运行，但没响应。\r\n\r\n" +
+                        "如果你看不到托盘图标，它可能被 Windows 折叠进隐藏区（点任务栏的 ^ 展开看看），" +
+                        "也可能那个实例已经卡住了。\r\n\r\n" +
+                        "要结束已有实例并重新启动吗？",
+                        "LensPop", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (answer != DialogResult.Yes) return;
+
+                    KillOtherInstances();
+                    System.Threading.Thread.Sleep(500);
                 }
+
                 try
                 {
                     Application.Run(new TrayApp());
@@ -55,6 +78,32 @@ namespace LensPop
                     Fatal(e);
                 }
             }
+        }
+
+        static void KillOtherInstances()
+        {
+            int me = System.Diagnostics.Process.GetCurrentProcess().Id;
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("LensPop"))
+            {
+                try
+                {
+                    if (p.Id == me) continue;
+                    LogLine("结束旧实例 pid=" + p.Id);
+                    p.Kill();
+                }
+                catch { }
+            }
+        }
+
+        public static bool IsAdmin()
+        {
+            try
+            {
+                var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+                var p = new System.Security.Principal.WindowsPrincipal(id);
+                return p.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+            }
+            catch { return false; }
         }
 
         public static void LogLine(string s)
@@ -241,6 +290,9 @@ namespace LensPop
             catch { }
 
             // 第一次运行（还没有配置文件）直接把设置窗摆出来，别让人以为没反应
+            Program.LogLine("托盘就绪 pid=" + System.Diagnostics.Process.GetCurrentProcess().Id +
+                " 图标可见=" + _tray.Visible + " 管理员=" + Program.IsAdmin());
+
             bool firstRun = !System.IO.File.Exists(AppConfig.FilePath);
             Program.LogLine("启动 firstRun=" + firstRun + " cfg=" + AppConfig.FilePath);
             try
