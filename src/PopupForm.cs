@@ -15,6 +15,8 @@ namespace LensPop
 
         public string SelectionText = "";
 
+        protected override bool ShowWithoutActivation { get { return true; } }
+
         readonly FlowLayoutPanel _flow = new FlowLayoutPanel();
         readonly Label _status = new Label();
         readonly List<Button> _buttons = new List<Button>();
@@ -64,7 +66,7 @@ namespace LensPop
             _autoHide.Interval = 2000;
             _autoHide.Tick += delegate { _autoHide.Stop(); Hide(); };
 
-            Load += delegate { Theme.Round(this, 10); };
+            Load += delegate { Theme.Round(this, 10); Theme.NoActivate(this); };
         Resize += delegate { Theme.Round(this, 10); };
         }
 
@@ -114,7 +116,9 @@ namespace LensPop
             top = Math.Max(scr.WorkingArea.Top + 4, Math.Min(top, scr.WorkingArea.Bottom - Height - 4));
             Location = new Point(left, top);
             if (!Visible) Show();
-            Theme.Round(this, 10);   // 改了宽度必须重算 Region，否则窗口被裁成半截，点按钮也点不到
+            Theme.Round(this, 10);
+            // 不抢焦点：否则接下来的 Ctrl+C 会发到我们自己身上，取不到选中文字
+            Theme.NoActivate(this);
             TopMost = true;
             BringToFront();
         }

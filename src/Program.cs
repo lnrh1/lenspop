@@ -688,6 +688,7 @@ namespace LensPop
             // 在 UI 线程上取词：后台线程发 Ctrl+C 会明显延迟，实测会一直等到超时
             Point at = Cursor.Position;
             ShowPopupLoading(at);
+            Program.LogLine("取词前前台是自己=" + MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id));
 
             string text = SelectionGrabber.GrabOnUiThread(900);
             Program.LogLine("取词结果长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
