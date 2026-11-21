@@ -313,6 +313,7 @@ namespace LensPop
                         Post(delegate { OnGlobalClick(pt); });
                     };
                     _hook.DragEnded += delegate(Point pt) { Post(delegate { OnDragEnded(pt); }); };
+                    _hook.DoubleClicked += delegate(Point pt) { Post(delegate { OnDoubleClicked(pt); }); };
 
                     if (!_cfg.Settings.SelectionPopup)
                     {
@@ -664,6 +665,29 @@ namespace LensPop
         }
 
         bool _grabbing;
+
+        /// <summary>双击选词：静默取词，只有真取到文字才弹胶囊（避免双击文件时误弹）</summary>
+        void OnDoubleClicked(Point pt)
+        {
+            if (!_cfg.Settings.SelectionPopup) return;
+            if (_grabbing) return;
+            _grabbing = true;
+            try
+            {
+                Point at = Cursor.Position;
+                string text = SelectionGrabber.GrabOnUiThread(600);
+                Program.LogLine("双击取词长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
+                if (string.IsNullOrEmpty(text) || text.Trim().Length < 2) return;
+                text = text.Trim();
+                if (text.Length > 6000) text = text.Substring(0, 6000);
+                EnsurePopup();
+                _popup.Ready(at, text);
+            }
+            finally
+            {
+                _grabbing = false;
+            }
+        }
 
         void OnDragEnded(Point pt)
         {

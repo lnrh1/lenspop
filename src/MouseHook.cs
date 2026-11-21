@@ -65,9 +65,12 @@ namespace LensPop
         IntPtr _hook = IntPtr.Zero;
         Point _down;
         bool _downValid;
+        int _lastUpTick;
+        Point _lastUpPoint;
 
         public event Action<Point> Clicked;      // 左键按下
         public event Action<Point> DragEnded;    // 拖拽后松开
+        public event Action<Point> DoubleClicked; // 双击选词
         public static Action<int, int, int> RawEvent;   // 调试用：消息、x、y
         public static int EventCount;                   // 收到多少鼠标事件
         public static int ClickCount;                   // 左键按下次数
@@ -117,6 +120,7 @@ namespace LensPop
                     _downValid = false;
                     int dx = info.pt.X - _down.X;
                     int dy = info.pt.Y - _down.Y;
+                    int nowTick = Environment.TickCount;
                     if (Math.Abs(dx) > 6 || Math.Abs(dy) > 6)
                     {
                         System.Threading.Interlocked.Increment(ref DragCount);
@@ -127,6 +131,19 @@ namespace LensPop
                             try { dragEnded(up); } catch { }
                         }
                     }
+                    else if (nowTick - _lastUpTick < 450 &&
+                             Math.Abs(info.pt.X - _lastUpPoint.X) < 5 &&
+                             Math.Abs(info.pt.Y - _lastUpPoint.Y) < 5)
+                    {
+                        var up2 = new Point(info.pt.X, info.pt.Y);
+                        var dbl = DoubleClicked;
+                        if (dbl != null)
+                        {
+                            try { dbl(up2); } catch { }
+                        }
+                    }
+                    _lastUpTick = nowTick;
+                    _lastUpPoint = new Point(info.pt.X, info.pt.Y);
                 }
             }
             return CallNextHookEx(_hook, nCode, wParam, lParam);
