@@ -41,6 +41,7 @@ namespace LensPop
 
         System.Windows.Forms.Timer _commitTimer;
         bool _syncing;
+        bool _committing;
 
         CheckBox _autostart;
         Button _shellBtn;
@@ -431,22 +432,28 @@ namespace LensPop
             _hkCapture = T(p, 200, 124, 130, false);
             Hint(p, "例如 Ctrl+Alt+S，框选屏幕区域后识别", 340, 128, 300, 20);
 
-            L(p, "翻译选中文字", 14, 204, 110);
-            _hkTranslate = T(p, 200, 200, 130, false);
-            Hint(p, "选中文字后按它直接翻译（不需要鼠标钩子）", 340, 204, 280, 20);
+            L(p, "翻译选中文字", 14, 160, 110);
+            _hkTranslate = T(p, 200, 156, 130, false);
+            Hint(p, "选中文字后按它直接翻译（不需要鼠标钩子）", 340, 160, 320, 20);
 
-            var diag = B(p, "运行自检", 200, 166, 100, 26);
+            var diag = B(p, "运行自检", 200, 194, 100, 26);
             diag.Click += delegate { RunDiagnostics(); };
-            var grab = B(p, "取词自测", 308, 166, 100, 26);
+            var grab = B(p, "取词自测", 308, 194, 100, 26);
             grab.Click += delegate { TestGrab(); };
-            Hint(p, "取词自测：3 秒内到别的窗口选中一段文字，程序会模拟 Ctrl+C 看能不能抓到", 416, 170, 360, 20);
+            Hint(p, "取词自测：3 秒内到别的窗口选中一段文字，程序会模拟 Ctrl+C 看能不能抓到", 416, 198, 360, 20);
 
-            var openDir = B(p, "打开配置目录", 14, 168, 120, 26);
+            var exportBtn = B(p, "导出配置", 14, 236, 100, 26);
+            exportBtn.Click += delegate { ExportConfig(); };
+            var importBtn = B(p, "导入配置", 122, 236, 100, 26);
+            importBtn.Click += delegate { ImportConfig(); };
+            Hint(p, "换版本、换机器时用这两个按钮搬配置（模型池、Key、提示词都在里面）", 232, 240, 480, 20);
+
+            var openDir = B(p, "打开配置目录", 14, 274, 120, 26);
             openDir.Click += delegate
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", AppConfig.Dir); } catch { }
             };
-            var openLog = B(p, "关于 LensPop", 146, 168, 120, 26);
+            var openLog = B(p, "关于 LensPop", 146, 274, 120, 26);
             openLog.Click += delegate
             {
                 MessageBox.Show(this,
@@ -458,7 +465,7 @@ namespace LensPop
                     "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
 
-            Hint(p, "所有网络请求都由本机直接发往你自己填的 API 地址，不经过任何中间服务器。", 14, 240, 700, 24);
+            Hint(p, "配置会同时写一份 config.bak.json 作为自动备份；读不出来时自动回退。", 14, 316, 700, 24);
         }
 
         /* ---------------- 提供商 ---------------- */
@@ -523,9 +530,11 @@ namespace LensPop
         void CommitAndSave()
         {
             if (_loading) return;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             CommitProviderFields();
             _cfg.Save();
             if (_provEmpty != null) _provEmpty.Visible = _cfg.Providers.Count == 0;
+            if (sw.ElapsedMilliseconds > 50) Program.LogLine("保存配置耗时 " + sw.ElapsedMilliseconds + "ms");
         }
 
         void ScheduleCommit()
@@ -582,6 +591,7 @@ namespace LensPop
 
         void OnPresetChanged()
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             if (_loading) return;
             int i = _presetBox.SelectedIndex;
             if (i < 0 || i >= Providers.All.Count) return;
@@ -592,21 +602,38 @@ namespace LensPop
             bool looksAuto = cur.Length == 0;
             if (preset.Id == "custom") looksAuto = false;
             if (looksAuto) _nameBox.Text = preset.Name;
+
+            if (sw.ElapsedMilliseconds > 200) Program.LogLine("切换预设 " + preset.Id + " 耗时 " + sw.ElapsedMilliseconds + "ms");
         }
 
         void CommitProviderFields()
         {
-            var p = SelectedProvider();
-            if (p == null) return;
-            int i = _presetBox.SelectedIndex;
-            if (i >= 0 && i < Providers.All.Count) p.PresetId = Providers.All[i].Id;
-            p.Name = _nameBox.Text.Trim();
-            if (p.Name.Length == 0) p.Name = "未命名提供商";
-            p.BaseUrl = _baseBox.Text.Trim();
-            p.ApiKey = _keyBox.Text.Trim();
+            if (_committing) return;
+            _committing = true;
+            try
+            {
+                var p = SelectedProvider();
+                if (p == null) return;
+                int i = _presetBox.SelectedIndex;
+                if (i >= 0 && i < Providers.All.Count) p.PresetId = Providers.All[i].Id;
+                p.Name = _nameBox.Text.Trim();
+                if (p.Name.Length == 0) p.Name = "未命名提供商";
+                p.BaseUrl = _baseBox.Text.Trim();
+                p.ApiKey = _keyBox.Text.Trim();
 
-            int sel = _provList.SelectedIndex;
-            if (sel >= 0 && sel < _provList.Items.Count) _provList.Items[sel] = p.Name;
+                int sel = _provList.SelectedIndex;
+                if (sel >= 0 && sel < _provList.Items.Count && !Equals(_provList.Items[sel], p.Name))
+                {
+                    // 改 ListBox 的内容会反过来触发 SelectedIndexChanged，先压住
+                    _syncing = true;
+                    _provList.Items[sel] = p.Name;
+                    _syncing = false;
+                }
+            }
+            finally
+            {
+                _committing = false;
+            }
         }
 
         void NewProvider()
@@ -950,6 +977,48 @@ namespace LensPop
             }
             _cfg.Save();
             UpdateShellStatus();
+        }
+
+        /* ---------------- 导入导出 ---------------- */
+
+        void ExportConfig()
+        {
+            try
+            {
+                if (!File.Exists(AppConfig.FilePath))
+                {
+                    _cfg.Save();
+                }
+                var dlg = new SaveFileDialog();
+                dlg.Filter = "LensPop 配置|*.json";
+                dlg.FileName = "lenspop-config-" + DateTime.Now.ToString("yyyyMMdd") + ".json";
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                File.Copy(AppConfig.FilePath, dlg.FileName, true);
+                SetStatusText("已导出到 " + dlg.FileName);
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show(this, "导出失败：" + e.Message);
+            }
+        }
+
+        void ImportConfig()
+        {
+            var dlg = new OpenFileDialog();
+            dlg.Filter = "LensPop 配置|*.json";
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            var imported = AppConfig.LoadFrom(dlg.FileName);
+            if (imported == null)
+            {
+                MessageBox.Show(this, "这个文件不是有效的 LensPop 配置。", "导入配置");
+                return;
+            }
+            imported.Save();
+            MessageBox.Show(this,
+                "已导入：" + imported.Providers.Count + " 个提供商 / " + imported.Pool.Count + " 个模型池条目。\r\n" +
+                "重新打开设置就能看到。",
+                "导入配置");
+            Close();
         }
 
         /* ---------------- 自检 ---------------- */

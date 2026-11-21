@@ -24,6 +24,8 @@ namespace LensPopTests
         {
             foreach (string a in args) if (a == "--ui") { UiShots.Run(); return 0; }
             foreach (string a in args) if (a == "--hook-debug") return HookDebug.Run();
+            foreach (string a in args) if (a == "--ui-preset") return PresetTest.Run();
+            foreach (string a in args) if (a == "--config") return ConfigTest.Run();
             try
             {
                 TestUi();
@@ -356,6 +358,96 @@ namespace LensPopTests
         }
     }
 
+
+    /// <summary>配置备份/恢复：删掉主配置后应能从 config.bak.json 恢复模型池（--config）</summary>
+    static class ConfigTest
+    {
+        public static int Run()
+        {
+            Console.WriteLine("配置路径: " + LensPop.AppConfig.FilePath);
+            var cfg = new LensPop.AppConfig();
+            var p = new LensPop.ProviderDef();
+            p.Id = "p_test";
+            p.PresetId = "deepseek";
+            p.Name = "测试提供商";
+            p.BaseUrl = "https://api.deepseek.com/v1";
+            p.ApiKey = "sk-test";
+            cfg.Providers.Add(p);
+
+            var m1 = new LensPop.PoolItem { Id = "m1", ProviderId = "p_test", Model = "deepseek-flash" };
+            var m2 = new LensPop.PoolItem { Id = "m2", ProviderId = "p_test", Model = "deepseek-v4-pro" };
+            cfg.Pool.Add(m1);
+            cfg.Pool.Add(m2);
+            cfg.Roles["translate"] = "m1";
+            cfg.Roles["ask"] = "m2";
+            cfg.Save();
+            cfg.Save();   // 第二次保存才会把上一份写成 .bak
+
+            bool bak = System.IO.File.Exists(LensPop.AppConfig.BackupPath);
+            Console.WriteLine("备份文件存在=" + bak);
+
+            // 模拟误删主配置
+            System.IO.File.Delete(LensPop.AppConfig.FilePath);
+            var back = LensPop.AppConfig.Load();
+            Console.WriteLine("恢复后 提供商=" + back.Providers.Count + " 模型池=" + back.Pool.Count + " 翻译角色=" + back.Roles["translate"]);
+            int ok = (back.Providers.Count == 1 && back.Pool.Count == 2 && back.Roles["translate"] == "m1") ? 0 : 1;
+            Console.WriteLine(ok == 0 ? "PASS" : "FAIL");
+            return ok;
+        }
+    }
+
+    /// <summary>把设置页的每个预设都切一遍，看会不会卡住或变慢（--ui-preset）</summary>
+    static class PresetTest
+    {
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            var seed = new LensPop.AppConfig();
+            var prov = new LensPop.ProviderDef();
+            prov.Id = "p_seed";
+            prov.PresetId = "deepseek";
+            prov.Name = "DeepSeek";
+            prov.BaseUrl = "https://api.deepseek.com/v1";
+            prov.ApiKey = "sk-test";
+            seed.Providers.Add(prov);
+            seed.Pool.Add(new LensPop.PoolItem { Id = "m1", ProviderId = "p_seed", Model = "deepseek-flash" });
+            seed.Roles["translate"] = "m1";
+            seed.Save();
+
+            var cfg = AppConfig.Load();
+            var form = new LensPop.SettingsForm(cfg);
+            form.StartPosition = FormStartPosition.Manual;
+            form.Location = new System.Drawing.Point(100, 80);
+            form.Show();
+            Application.DoEvents();
+
+            var field = typeof(LensPop.SettingsForm).GetField("_presetBox",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var combo = field == null ? null : (System.Windows.Forms.ComboBox)field.GetValue(form);
+            if (combo == null) { Console.WriteLine("拿不到预设下拉框"); return 1; }
+
+            Console.WriteLine("presets=" + LensPop.Providers.All.Count);
+            for (int round = 0; round < 3; round++)
+            for (int i = 0; i < LensPop.Providers.All.Count; i++)
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                combo.SelectedIndex = i;
+                Application.DoEvents();
+                var until = DateTime.Now.AddMilliseconds(700);
+                while (DateTime.Now < until)
+                {
+                    Application.DoEvents();
+                    System.Threading.Thread.Sleep(10);
+                }
+                Console.WriteLine("  " + i + " " + LensPop.Providers.All[i].Id + " " + sw.ElapsedMilliseconds + "ms");
+            }
+
+            Console.WriteLine("done");
+            form.Close();
+            return 0;
+        }
+    }
 
     /// <summary>钩子调试：用 SendInput 模拟拖拽并打印钩子收到的消息（--hook-debug）</summary>
     static class HookDebug

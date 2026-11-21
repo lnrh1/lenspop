@@ -174,8 +174,21 @@ namespace LensPop
                 try
                 {
                     _hook = new MouseHook();
-                    _hook.Clicked += delegate(Point pt) { Post(delegate { OnGlobalClick(pt); }); };
+                    _hook.Clicked += delegate(Point pt)
+                    {
+                        // 弹层没显示时不需要跨线程，减少一切无谓开销
+                        if (_popup == null || !_popup.Visible) return;
+                        Post(delegate { OnGlobalClick(pt); });
+                    };
                     _hook.DragEnded += delegate(Point pt) { Post(delegate { OnDragEnded(pt); }); };
+
+                    if (!_cfg.Settings.SelectionPopup)
+                    {
+                        Program.LogLine("划词弹窗已关闭，不安装鼠标钩子");
+                        MessagePump.Run();
+                        return;
+                    }
+
                     bool ok = _hook.Install();
                     Program.LogLine("钩子安装=" + ok + (ok ? "" : (" 错误码=" + _hook.LastError)));
                     if (!ok)

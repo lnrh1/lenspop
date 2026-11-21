@@ -88,21 +88,39 @@ namespace LensPop
             get { return Path.Combine(Dir, "config.json"); }
         }
 
-        public static AppConfig Load()
+        [ScriptIgnore]
+        public static string BackupPath
         {
-            AppConfig cfg = null;
+            get { return Path.Combine(Dir, "config.bak.json"); }
+        }
+
+        /// <summary>从指定文件读一份配置（导入用）；读不出来返回 null</summary>
+        public static AppConfig LoadFrom(string path)
+        {
             try
             {
-                if (File.Exists(FilePath))
-                {
-                    string json = File.ReadAllText(FilePath, System.Text.Encoding.UTF8);
-                    var ser = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-                    cfg = ser.Deserialize<AppConfig>(json);
-                }
+                if (!File.Exists(path)) return null;
+                string json = File.ReadAllText(path, System.Text.Encoding.UTF8);
+                var ser = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
+                var cfg = ser.Deserialize<AppConfig>(json);
+                if (cfg == null) return null;
+                cfg.Normalize();
+                return cfg;
             }
             catch
             {
-                cfg = null;
+                return null;
+            }
+        }
+
+        public static AppConfig Load()
+        {
+            var cfg = LoadFrom(FilePath);
+            if (cfg == null)
+            {
+                // 主配置坏了/被删了，退回上一次的自动备份
+                cfg = LoadFrom(BackupPath);
+                if (cfg != null) Program.LogLine("主配置不可用，已从 config.bak.json 恢复");
             }
             if (cfg == null) cfg = new AppConfig();
             cfg.Normalize();
@@ -136,6 +154,19 @@ namespace LensPop
             {
                 var ser = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
                 string json = ser.Serialize(this);
+
+                // 先留一份上一次的配置，防止写坏或误删后一无所有
+                try
+                {
+                    if (File.Exists(FilePath))
+                    {
+                        string old = File.ReadAllText(FilePath, System.Text.Encoding.UTF8);
+                        if (!string.IsNullOrEmpty(old) && old.Length > 20)
+                            File.WriteAllText(BackupPath, old, new System.Text.UTF8Encoding(false));
+                    }
+                }
+                catch { }
+
                 File.WriteAllText(FilePath, json, new System.Text.UTF8Encoding(false));
             }
             catch
