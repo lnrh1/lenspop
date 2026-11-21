@@ -23,6 +23,7 @@ namespace LensPopTests
         static int Main(string[] args)
         {
             foreach (string a in args) if (a == "--ui") { UiShots.Run(); return 0; }
+            foreach (string a in args) if (a == "--hook-debug") return HookDebug.Run();
             try
             {
                 TestUi();
@@ -352,6 +353,57 @@ namespace LensPopTests
             {
                 Console.WriteLine("shot failed " + file + ": " + e.Message);
             }
+        }
+    }
+
+
+    /// <summary>钩子调试：打印收到的鼠标消息（--hook-debug）</summary>
+    static class HookDebug
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool SetCursorPos(int x, int y);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var hook = new LensPop.MouseHook();
+            LensPop.MouseHook.RawEvent = delegate(int msg, int x, int y)
+            {
+                Console.WriteLine("evt 0x" + msg.ToString("x4") + " @" + x + "," + y);
+            };
+            hook.Clicked += delegate(System.Drawing.Point p) { Console.WriteLine("  -> Clicked"); };
+            hook.DragEnded += delegate(System.Drawing.Point p) { Console.WriteLine("  -> DragEnded"); };
+
+            var th = new System.Threading.Thread(delegate()
+            {
+                bool ok = hook.Install();
+                Console.WriteLine("installed=" + ok);
+                LensPop.MessagePump.Run();
+                Console.WriteLine("pump exited");
+            });
+            th.SetApartmentState(System.Threading.ApartmentState.STA);
+            th.IsBackground = true;
+            th.Start();
+
+            var t2 = new System.Threading.Thread(delegate()
+            {
+                System.Threading.Thread.Sleep(1500);
+                SetCursorPos(320, 320);
+                System.Threading.Thread.Sleep(200);
+                mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
+                System.Threading.Thread.Sleep(150);
+                SetCursorPos(560, 350);
+                System.Threading.Thread.Sleep(200);
+                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
+                System.Threading.Thread.Sleep(1000);
+                Environment.Exit(0);
+            });
+            t2.IsBackground = true;
+            t2.Start();
+            System.Threading.Thread.Sleep(5000);
+            return 0;
         }
     }
 

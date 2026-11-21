@@ -36,7 +36,16 @@ namespace LensPop
             bool created;
             using (var mutex = new Mutex(true, "LensPop.Tray.SingleInstance", out created))
             {
-                if (!created) return;
+                if (!created)
+                {
+                    // 已经有实例在跑：让它把设置窗弹出来，而不是静默退出
+                    try
+                    {
+                        using (var ev = EventWaitHandle.OpenExisting("LensPop.OpenSettings")) ev.Set();
+                    }
+                    catch { }
+                    return;
+                }
                 try
                 {
                     Application.Run(new TrayApp());
@@ -46,6 +55,18 @@ namespace LensPop
                     Fatal(e);
                 }
             }
+        }
+
+        public static void LogLine(string s)
+        {
+            try
+            {
+                string p = System.IO.Path.Combine(AppConfig.Dir, "debug.log");
+                var fi = new System.IO.FileInfo(p);
+                if (fi.Exists && fi.Length > 128 * 1024) System.IO.File.Delete(p);
+                System.IO.File.AppendAllText(p, DateTime.Now.ToString("HH:mm:ss.fff") + "  " + s + "\r\n");
+            }
+            catch { }
         }
 
         static void Fatal(Exception e)
@@ -120,12 +141,14 @@ namespace LensPop
     class TrayApp : ApplicationContext
     {
         readonly NotifyIcon _tray = new NotifyIcon();
-        readonly MouseHook _hook = new MouseHook();
+        MouseHook _hook;
+        Thread _hookThread;
         readonly HotkeyHost _hotkeys = new HotkeyHost();
         readonly Form _invoker = new Form();
         PopupForm _popup;
         AppConfig _cfg;
         ContextMenuStrip _menu;
+        EventWaitHandle _openEvent;
 
         public TrayApp()
         {
@@ -145,13 +168,82 @@ namespace LensPop
 
             BuildMenu();
 
-            _hook.Clicked += OnGlobalClick;
-            _hook.DragEnded += OnDragEnded;
-            _hook.Install();
+            // 鼠标钩子必须跑在独立线程里：装在 UI 线程上时，界面一忙鼠标就会发飘
+            _hookThread = new Thread(delegate()
+            {
+                try
+                {
+                    _hook = new MouseHook();
+                    _hook.Clicked += delegate(Point pt) { Post(delegate { OnGlobalClick(pt); }); };
+                    _hook.DragEnded += delegate(Point pt) { Post(delegate { OnDragEnded(pt); }); };
+                    _hook.Install();
+                    MessagePump.Run();
+                }
+                catch (Exception e)
+                {
+                    Program.LogLine("钩子线程异常：" + e.Message);
+                }
+            });
+            _hookThread.SetApartmentState(ApartmentState.STA);
+            _hookThread.IsBackground = true;
+            _hookThread.Start();
 
             RegisterHotkeys();
 
             if (_cfg.Settings.ShellMenu && !ShellMenu.IsRegistered()) ShellMenu.Register();
+
+            // 第二个实例双击启动时，把设置窗调出来
+            try
+            {
+                _openEvent = new EventWaitHandle(false, EventResetMode.AutoReset, "LensPop.OpenSettings");
+                var th = new Thread(delegate()
+                {
+                    while (true)
+                    {
+                        try
+                        {
+                            _openEvent.WaitOne();
+                            _invoker.BeginInvoke(new Action(OpenSettings));
+                        }
+                        catch { return; }
+                    }
+                });
+                th.IsBackground = true;
+                th.Start();
+            }
+            catch { }
+
+            // 第一次运行（还没有配置文件）直接把设置窗摆出来，别让人以为没反应
+            bool firstRun = !System.IO.File.Exists(AppConfig.FilePath);
+            Program.LogLine("启动 firstRun=" + firstRun + " cfg=" + AppConfig.FilePath);
+            try
+            {
+                _invoker.BeginInvoke(new Action(delegate
+                {
+                    Program.LogLine("进入首屏逻辑");
+                    try
+                    {
+                        _tray.BalloonTipTitle = firstRun ? "LensPop 已启动" : "LensPop 已在托盘运行";
+                        _tray.BalloonTipText = firstRun ? "右键托盘图标 → 设置，先填一个 API Key。" : "划词即译；右键托盘图标打开设置。";
+                        _tray.ShowBalloonTip(3000);
+                    }
+                    catch { }
+                    if (firstRun) OpenSettings();
+                }));
+            }
+            catch (Exception e)
+            {
+                Program.LogLine("首屏调度失败：" + e.Message);
+            }
+        }
+
+        void Post(Action a)
+        {
+            try
+            {
+                if (_invoker != null && _invoker.IsHandleCreated) _invoker.BeginInvoke(a);
+            }
+            catch { }
         }
 
         static Icon LoadIcon()
@@ -204,7 +296,7 @@ namespace LensPop
 
         void Quit()
         {
-            try { _hook.Uninstall(); } catch { }
+            try { if (_hook != null) _hook.Uninstall(); } catch { }
             try { _hotkeys.Dispose(); } catch { }
             _tray.Visible = false;
             _tray.Dispose();
@@ -222,14 +314,28 @@ namespace LensPop
 
         void OpenSettings()
         {
+            Program.LogLine("OpenSettings 进入");
             HidePopup();
-            using (var f = new SettingsForm(AppConfig.Load()))
+            try
             {
-                f.ShowDialog();
+                var cfg = AppConfig.Load();
+                Program.LogLine("配置载入 ok providers=" + cfg.Providers.Count);
+                using (var f = new SettingsForm(cfg))
+                {
+                    Program.LogLine("设置窗已创建，准备 ShowDialog");
+                    f.ShowDialog();
+                    Program.LogLine("设置窗已关闭");
+                }
+            }
+            catch (Exception e)
+            {
+                Program.LogLine("OpenSettings 异常：" + e.GetType().Name + " / " + e.Message + " @ " + e.StackTrace);
+                throw;
             }
             _cfg = AppConfig.Load();
             BuildMenu();
             RegisterHotkeys();
+            Program.LogLine("OpenSettings 结束");
         }
 
         /* ---------- 划词 ---------- */
@@ -244,6 +350,8 @@ namespace LensPop
         void OnDragEnded(Point pt)
         {
             if (!_cfg.Settings.SelectionPopup) return;
+            // 在自己的窗口里拖选文字（设置、结果窗）不要弹划词，也别去抢剪贴板
+            if (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id)) return;
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string text = SelectionGrabber.Grab(500);

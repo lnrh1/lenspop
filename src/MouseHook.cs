@@ -9,6 +9,26 @@ namespace LensPop
     /// <summary>全局鼠标钩子：用于划词检测；顺带在需要时模拟 Ctrl+C 取选中文本</summary>
     public class MouseHook : IDisposable
     {
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+
+        /// <summary>前台窗口是不是自己的进程（自己的界面里不该触发划词）</summary>
+        public static bool ForegroundIsSelf(int myPid)
+        {
+            try
+            {
+                IntPtr h = GetForegroundWindow();
+                if (h == IntPtr.Zero) return false;
+                uint pid;
+                GetWindowThreadProcessId(h, out pid);
+                return (int)pid == myPid;
+            }
+            catch { return false; }
+        }
+
         const int WH_MOUSE_LL = 14;
         const int WM_LBUTTONDOWN = 0x0201;
         const int WM_LBUTTONUP = 0x0202;
@@ -48,11 +68,16 @@ namespace LensPop
 
         public event Action<Point> Clicked;      // 左键按下
         public event Action<Point> DragEnded;    // 拖拽后松开
+        public static Action<int, int, int> RawEvent;   // 调试用：消息、x、y
 
-        public void Install()
+        public bool Installed { get { return _hook != IntPtr.Zero; } }
+        public int LastError { get { return Marshal.GetLastWin32Error(); } }
+
+        public bool Install()
         {
             _proc = HookCallback;
             _hook = SetWindowsHookEx(WH_MOUSE_LL, _proc, GetModuleHandle(null), 0);
+            return _hook != IntPtr.Zero;
         }
 
         public void Uninstall()
@@ -70,6 +95,8 @@ namespace LensPop
             {
                 var info = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
                 int msg = (int)wParam;
+                var raw = RawEvent;
+                if (raw != null) { try { raw(msg, info.pt.X, info.pt.Y); } catch { } }
                 if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN)
                 {
                     _down = new Point(info.pt.X, info.pt.Y);
@@ -102,6 +129,41 @@ namespace LensPop
         public void Dispose()
         {
             Uninstall();
+        }
+    }
+
+    /// <summary>钩子线程用的原生消息泵（WinForms 的 Application.Run 在非主线程上不可靠）</summary>
+    public static class MessagePump
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        public struct WinMsg
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public int x;
+            public int y;
+        }
+
+        [DllImport("user32.dll")]
+        static extern int GetMessage(out WinMsg msg, IntPtr hWnd, uint min, uint max);
+
+        [DllImport("user32.dll")]
+        static extern bool TranslateMessage(ref WinMsg msg);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr DispatchMessage(ref WinMsg msg);
+
+        public static void Run()
+        {
+            WinMsg msg;
+            while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0)
+            {
+                TranslateMessage(ref msg);
+                DispatchMessage(ref msg);
+            }
         }
     }
 

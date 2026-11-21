@@ -39,6 +39,9 @@ namespace LensPop
         string _promptKey = "translate";
         readonly Dictionary<string, string> _promptDraft = new Dictionary<string, string>();
 
+        System.Windows.Forms.Timer _commitTimer;
+        bool _syncing;
+
         CheckBox _autostart;
         Button _shellBtn;
         Label _shellStatus;
@@ -59,6 +62,15 @@ namespace LensPop
             MinimizeBox = false;
 
             BuildUi();
+
+            _commitTimer = new System.Windows.Forms.Timer();
+            _commitTimer.Interval = 400;
+            _commitTimer.Tick += delegate
+            {
+                _commitTimer.Stop();
+                CommitAndSave();
+            };
+
             LoadPrompts();
             LoadProviders();
             RefreshPool();
@@ -219,6 +231,11 @@ namespace LensPop
 
             L(p, "API Key", 200, 204, 80);
             _keyBox = T(p, 200, 224, 460, true);
+
+            // 直接开填就自动建提供商，不用先去点「新增」
+            _nameBox.TextChanged += delegate { OnProviderFieldEdited(); };
+            _baseBox.TextChanged += delegate { OnProviderFieldEdited(); };
+            _keyBox.TextChanged += delegate { OnProviderFieldEdited(); };
 
             _fetchBtn = B(p, "获取模型", 200, 262, 110, 28);
             _fetchBtn.Click += delegate { FetchModels(); };
@@ -488,9 +505,67 @@ namespace LensPop
             _noteLabel.Text = note;
         }
 
-        void OnProviderSelected()
+        void SetStatusText(string s)
+        {
+            if (_status != null) _status.Text = s;
+        }
+
+        void CommitAndSave()
         {
             if (_loading) return;
+            CommitProviderFields();
+            _cfg.Save();
+            if (_provEmpty != null) _provEmpty.Visible = _cfg.Providers.Count == 0;
+        }
+
+        void ScheduleCommit()
+        {
+            if (_commitTimer == null) return;
+            _commitTimer.Stop();
+            _commitTimer.Start();
+        }
+
+        void OnProviderFieldEdited()
+        {
+            if (_loading || _syncing) return;
+            // 还没选提供商时先不落盘：等「获取模型」成功后再建（见 FetchModels）
+            ScheduleCommit();
+        }
+
+        /// <summary>拿界面上的当前值新建一个提供商并存盘</summary>
+        ProviderDef CreateProviderFromFields()
+        {
+            int pi = _presetBox.SelectedIndex;
+            if (pi < 0 || pi >= Providers.All.Count) pi = Providers.All.Count - 1;
+            var preset = Providers.All[pi];
+
+            string url = _baseBox.Text.Trim();
+            string name = _nameBox.Text.Trim();
+
+            var prov = new ProviderDef();
+            prov.Id = "p_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            prov.PresetId = preset.Id;
+            prov.BaseUrl = url.Length > 0 ? url : preset.BaseUrl;
+            prov.ApiKey = _keyBox.Text.Trim();
+            prov.Name = name.Length > 0 ? name : (preset.Id == "custom" ? "自定义提供商" : preset.Name);
+
+            _cfg.Providers.Add(prov);
+
+            _syncing = true;
+            _provList.Items.Add(prov.Name);
+            _provList.SelectedIndex = _provList.Items.Count - 1;
+            if (_baseBox.Text.Trim().Length == 0 && prov.BaseUrl.Length > 0) _baseBox.Text = prov.BaseUrl;
+            if (_nameBox.Text.Trim().Length == 0) _nameBox.Text = prov.Name;
+            _syncing = false;
+
+            if (_provEmpty != null) _provEmpty.Visible = false;
+            _cfg.Save();
+            return prov;
+        }
+
+        void OnProviderSelected()
+        {
+            if (_loading || _syncing) return;
             CommitProviderFields();
             ShowProviderFields(SelectedProvider());
         }
@@ -554,30 +629,51 @@ namespace LensPop
 
         async void FetchModels()
         {
-            CommitProviderFields();
             var p = SelectedProvider();
-            if (p == null)
+            string baseUrl;
+            string apiKey;
+            if (p != null)
             {
-                _status.Text = "先新增一个提供商";
-                return;
+                CommitProviderFields();
+                baseUrl = p.BaseUrl;
+                apiKey = p.ApiKey;
             }
-            if (string.IsNullOrEmpty(p.BaseUrl))
+            else
             {
-                _status.Text = "先填 Base URL";
+                baseUrl = _baseBox.Text.Trim();
+                apiKey = _keyBox.Text.Trim();
+            }
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                SetStatusText("先填 Base URL（选预设会自动填）");
                 return;
             }
             _fetchBtn.Enabled = false;
             _fetchBtn.Text = "获取中…";
-            _status.Text = "正在请求 /models …";
+            SetStatusText("正在请求 /models …");
             try
             {
-                var list = await Api.ListModelsAsync(p.BaseUrl, p.ApiKey, 30);
+                var list = await Api.ListModelsAsync(baseUrl, apiKey, 30);
+
+                // 拿到列表说明 Base URL / Key 都可用，这时候才真正建出提供商
+                bool createdNew = false;
+                string createdName = "";
+                if (SelectedProvider() == null)
+                {
+                    var created = CreateProviderFromFields();
+                    createdNew = true;
+                    createdName = created.Name;
+                }
+
                 _models.Clear();
                 _models.AddRange(list);
                 _modelList.Items.Clear();
                 foreach (string m in list)
                     _modelList.Items.Add(Providers.LooksVision(m) ? m + "   · 可读图" : m);
-                _status.Text = "拿到 " + list.Count + " 个模型，选一个点「存入模型池」";
+
+                SetStatusText(createdNew
+                    ? "已新建提供商「" + createdName + "」，拿到 " + list.Count + " 个模型，选一个「存入模型池」"
+                    : "拿到 " + list.Count + " 个模型，选一个点「存入模型池」");
             }
             catch (Exception ex)
             {
