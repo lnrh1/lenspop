@@ -9,6 +9,7 @@ namespace LensPop
 {
     public class SettingsForm : Form
     {
+        TabControl _tabs;
         readonly AppConfig _cfg;
         bool _loading = true;
 
@@ -54,8 +55,10 @@ namespace LensPop
         {
             _cfg = cfg;
             Text = "LensPop 设置";
-            Width = 830;
-            Height = 660;
+            DoubleBuffered = true;
+            Padding = new Padding(0, 104, 0, 0);
+            Width = 880;
+            Height = 692;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.Bg;
             Font = Theme.UI;
@@ -138,15 +141,48 @@ namespace LensPop
             b.Width = w;
             b.Height = h;
             parent.Controls.Add(b);
+            b.Resize += delegate { Theme.RoundControl(b, 6); };
             return b;
         }
 
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            Program.LogLine("设置窗尺寸 Client=" + ClientSize);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            base.OnPaintBackground(e);
+            var g = e.Graphics;
+            g.Clear(Theme.Bg);
+            Theme.PaintHeader(g, new Rectangle(0, 0, ClientSize.Width, 60),
+                "LensPop", "划词翻译 · OCR · 截图", "v1.0.0");
+            Theme.PaintTabStrip(g, new Rectangle(0, 60, ClientSize.Width, 44), _tabs);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (_tabs != null && e.Y >= 60 && e.Y <= 104)
+            {
+                int i = Theme.TabStripHit(new Rectangle(0, 60, ClientSize.Width, 44), _tabs, e.X);
+                if (i >= 0 && i != _tabs.SelectedIndex)
+                {
+                    _tabs.SelectedIndex = i;
+                    Invalidate();
+                }
+            }
+            base.OnMouseDown(e);
+        }
         void BuildUi()
         {
             var tabs = new TabControl();
+            _tabs = tabs;
+            Theme.StripTabs(tabs);
             tabs.Dock = DockStyle.Fill;
             tabs.Font = Theme.UI;
             Controls.Add(tabs);
+            foreach (TabPage pg in tabs.TabPages) { pg.BackColor = Theme.Bg; pg.UseVisualStyleBackColor = false; }
 
             var bottom = new Panel();
             bottom.Dock = DockStyle.Bottom;
