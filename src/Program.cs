@@ -201,6 +201,76 @@ namespace LensPop
         EventWaitHandle _openEvent;
         TaskbarWatcher _watcher;
 
+        /// <summary>把本程序在 Win11 的托盘图标标记为「常显」</summary>
+        static void PromoteTrayIcon()
+        {
+            try
+            {
+                string exe = Application.ExecutablePath;
+                using (var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\NotifyIconSettings", true))
+                {
+                    if (root == null) { Program.LogLine("托盘常显：找不到 NotifyIconSettings"); return; }
+                    bool hit = false;
+                    foreach (string name in root.GetSubKeyNames())
+                    {
+                        using (var k = root.OpenSubKey(name, true))
+                        {
+                            if (k == null) continue;
+                            string path = k.GetValue("ExecutablePath") as string;
+                            if (path == null || !path.Equals(exe, StringComparison.OrdinalIgnoreCase)) continue;
+                            k.SetValue("IsPromoted", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                            hit = true;
+                            Program.LogLine("托盘图标已设为常显：" + name);
+                        }
+                    }
+                    if (!hit) Program.LogLine("托盘常显：还没登记到本程序，稍后再试");
+                }
+            }
+            catch (Exception e)
+            {
+                Program.LogLine("托盘常显失败：" + e.GetType().Name + " " + e.Message);
+                WriteTrayRegFile();
+            }
+        }
+
+        /// <summary>写一份 .reg：把托盘图标设为常显（进程没权限时让用户双击导入）</summary>
+        static void WriteTrayRegFile()
+        {
+            try
+            {
+                string exe = Application.ExecutablePath;
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("Windows Registry Editor Version 5.00");
+                sb.AppendLine();
+                bool hit = false;
+                using (var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\NotifyIconSettings", false))
+                {
+                    if (root != null)
+                    {
+                        foreach (string name in root.GetSubKeyNames())
+                        {
+                            using (var k = root.OpenSubKey(name, false))
+                            {
+                                if (k == null) continue;
+                                string path = k.GetValue("ExecutablePath") as string;
+                                if (path == null || !path.Equals(exe, StringComparison.OrdinalIgnoreCase)) continue;
+                                string bs = ((char)92).ToString();
+                                sb.AppendLine("[HKEY_CURRENT_USER" + bs + "Control Panel" + bs + "NotifyIconSettings" + bs + name + "]");
+                                sb.AppendLine("\"IsPromoted\"=dword:00000001");
+                                sb.AppendLine();
+                                hit = true;
+                            }
+                        }
+                    }
+                }
+                if (!hit) return;
+                string file = System.IO.Path.Combine(AppConfig.Dir, "LensPop-托盘常显.reg");
+                System.IO.File.WriteAllText(file, sb.ToString(), new System.Text.UnicodeEncoding(false, true));
+                Program.LogLine("已生成托盘常显注册表文件：" + file);
+            }
+            catch { }
+        }
+
         void ReAddTray()
         {
             try
@@ -320,10 +390,20 @@ namespace LensPop
                     _tray.Visible = false;
                     _tray.Visible = true;
                     Program.LogLine("托盘图标重试完成 可见=" + _tray.Visible);
+                    PromoteTrayIcon();
                 }
                 catch { }
             };
             trayFix.Start();
+
+            var trayFix2 = new System.Windows.Forms.Timer();
+            trayFix2.Interval = 6000;
+            trayFix2.Tick += delegate
+            {
+                trayFix2.Stop();
+                PromoteTrayIcon();
+            };
+            trayFix2.Start();
 
             Program.LogLine("托盘就绪 pid=" + System.Diagnostics.Process.GetCurrentProcess().Id +
                 " 图标可见=" + _tray.Visible + " 管理员=" + Program.IsAdmin());
