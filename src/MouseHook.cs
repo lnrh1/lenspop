@@ -187,38 +187,69 @@ namespace LensPop
         /// 在 UI 线程上取词：用于「取词测试」这种目标窗口就是自己的场景。
         /// 在后台线程里对自己的窗口发 Ctrl+C 会明显延迟（消息要等目标线程处理），所以这里就地泵消息。
         /// </summary>
+        /// <summary>
+        /// Grab the selected text on the UI thread.
+        /// Two attempts with a settle delay: browsers/Electron apps need a few ms after
+        /// mouse-up before Ctrl+C actually copies the finished selection.
+        /// </summary>
         public static string GrabOnUiThread(int timeoutMs)
         {
             string before = null;
             try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
             catch { before = null; }
 
-            string marker = "\u0001lenspop-" + Guid.NewGuid().ToString("N");
-            try { Clipboard.SetText(marker); }
-            catch (Exception ex) { Program.LogLine("grab(ui): 哨兵失败 " + ex.Message); }
+            string marker = "lenspop-" + Guid.NewGuid().ToString("N");
 
-            keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
-            keybd_event(VK_C, 0, 0, UIntPtr.Zero);
-            keybd_event(VK_C, 0, KEYUP, UIntPtr.Zero);
-            keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
-
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < timeoutMs)
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                Application.DoEvents();
-                System.Threading.Thread.Sleep(20);
-                try
+                if (attempt == 0)
                 {
-                    if (!Clipboard.ContainsText()) continue;
-                    string now = Clipboard.GetText();
-                    if (string.IsNullOrEmpty(now) || now == marker) continue;
-                    Program.LogLine("grab(ui): 成功 " + now.Length + " 字");
-                    return now;
+                    // let the source app finish the selection before we press Ctrl+C
+                    var settle = System.Diagnostics.Stopwatch.StartNew();
+                    while (settle.ElapsedMilliseconds < 45)
+                    {
+                        Application.DoEvents();
+                        System.Threading.Thread.Sleep(5);
+                    }
                 }
-                catch { }
+                else
+                {
+                    Program.LogLine("grab(ui): 第1次没取到，重试");
+                    var settle2 = System.Diagnostics.Stopwatch.StartNew();
+                    while (settle2.ElapsedMilliseconds < 120)
+                    {
+                        Application.DoEvents();
+                        System.Threading.Thread.Sleep(5);
+                    }
+                }
+
+                try { Clipboard.SetText(marker); }
+                catch (Exception ex) { Program.LogLine("grab(ui): 写哨兵失败 " + ex.Message); }
+
+                keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+                keybd_event(VK_C, 0, 0, UIntPtr.Zero);
+                keybd_event(VK_C, 0, KEYUP, UIntPtr.Zero);
+                keybd_event(VK_CONTROL, 0, KEYUP, UIntPtr.Zero);
+
+                int waitMs = attempt == 0 ? 400 : 550;
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                while (sw.ElapsedMilliseconds < waitMs)
+                {
+                    Application.DoEvents();
+                    System.Threading.Thread.Sleep(15);
+                    try
+                    {
+                        if (!Clipboard.ContainsText()) continue;
+                        string now = Clipboard.GetText();
+                        if (string.IsNullOrEmpty(now) || now == marker) continue;
+                        Program.LogLine("grab(ui): 成功 " + now.Length + " 字（第" + (attempt + 1) + "次）");
+                        return now;
+                    }
+                    catch { }
+                }
             }
 
-            Program.LogLine("grab(ui): 超时失败");
+            Program.LogLine("grab(ui): 两次都超时失败");
             try { if (before != null) Clipboard.SetText(before); } catch { }
             return null;
         }
