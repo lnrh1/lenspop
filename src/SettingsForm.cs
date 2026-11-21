@@ -1127,7 +1127,8 @@ namespace LensPop
         void TestPopup()
         {
             var pop = new PopupForm();
-            pop.ShowAt(Cursor.Position, "测试");
+            pop.ShowLoading(Cursor.Position);
+            pop.Ready(Cursor.Position, "测试文字");
             var t = new System.Windows.Forms.Timer();
             t.Interval = 5000;
             t.Tick += delegate { t.Stop(); t.Dispose(); pop.Close(); };

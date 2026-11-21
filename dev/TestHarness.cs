@@ -33,6 +33,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--ui-provider") return ProviderSwitchTest.Run();
             try
             {
+                TestImageEncode();
                 TestUi();
                 TestThinking();
                 TestParseLines();
@@ -75,6 +76,28 @@ namespace LensPopTests
                 using (var f = new BusyForm("测试", new Point(100, 100))) Line("  BusyForm ok");
             }
             catch (Exception e) { Line("  BusyForm 失败：" + e.Message); }
+        }
+
+
+        static void TestImageEncode()
+        {
+            Line("== 图片编码 ==");
+            var bmp = new System.Drawing.Bitmap(200, 120);   // 默认 32bppArgb，正是截图那条路径
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.White);
+                g.DrawString("LensPop", new System.Drawing.Font("Segoe UI", 18f), System.Drawing.Brushes.Black, 10, 40);
+            }
+            try
+            {
+                string url = LensPop.ImageTools.ToDataUrl(bmp);
+                Line("  ToDataUrl 成功，长度=" + url.Length + " 前缀=" + url.Substring(0, 22));
+            }
+            catch (Exception e)
+            {
+                Line("  ToDataUrl 失败：" + e.GetType().Name + " " + e.Message);
+            }
+            bmp.Dispose();
         }
 
         static void TestThinking()
@@ -291,7 +314,8 @@ namespace LensPopTests
             Steps.Add(delegate
             {
                 var f = new PopupForm();
-                f.ShowAt(new Point(520, 460), "demo");
+                f.ShowLoading(new Point(520, 460));
+                f.Ready(new Point(520, 460), "演示文字");
                 _current = f;
                 var tm = new System.Windows.Forms.Timer();
                 tm.Interval = 1000;

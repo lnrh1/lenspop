@@ -686,29 +686,41 @@ namespace LensPop
             // 在自己的窗口里拖选文字（设置、结果窗）不要弹划词，也别去抢剪贴板
             if (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id)) return;
             // 在 UI 线程上取词：后台线程发 Ctrl+C 会明显延迟，实测会一直等到超时
+            Point at = Cursor.Position;
+            ShowPopupLoading(at);
+
             string text = SelectionGrabber.GrabOnUiThread(900);
             Program.LogLine("取词结果长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
-            if (string.IsNullOrEmpty(text)) return;
+
+            if (string.IsNullOrEmpty(text) || text.Trim().Length < 2)
+            {
+                if (_popup != null) _popup.Fail(at, "没取到文字，换个程序试试");
+                return;
+            }
+
             text = text.Trim();
-            if (text.Length < 2) return;
             if (text.Length > 6000) text = text.Substring(0, 6000);
-            ShowPopup(Cursor.Position, text);
+            if (_popup != null)
+            {
+                _popup.Ready(at, text);
+                Program.LogLine("弹层就绪 位置 " + _popup.Bounds.X + "," + _popup.Bounds.Y + " 可见=" + _popup.Visible);
+            }
         }
 
-        void ShowPopup(Point pt, string text)
+        void EnsurePopup()
         {
-            Program.LogLine("弹出划词条");
-            if (_popup == null)
-            {
-                _popup = new PopupForm();
-                _popup.TranslateClicked += delegate { OpenTranslate(_popup.SelectionText); };
-                _popup.AskClicked += delegate { OpenAsk(_popup.SelectionText); };
-                _popup.SearchClicked += delegate { Search(_popup.SelectionText); };
-                _popup.SettingsClicked += delegate { OpenSettings(); };
-            }
-            _popup.ShowAt(pt, text);
-            Program.LogLine("弹层位置 " + _popup.Bounds.X + "," + _popup.Bounds.Y + " 尺寸 " +
-                _popup.Width + "x" + _popup.Height + " 可见=" + _popup.Visible);
+            if (_popup != null && !_popup.IsDisposed) return;
+            _popup = new PopupForm();
+            _popup.TranslateClicked += delegate { Program.LogLine("点击胶囊: 翻译"); OpenTranslate(_popup.SelectionText); };
+            _popup.AskClicked += delegate { Program.LogLine("点击胶囊: 询问"); OpenAsk(_popup.SelectionText); };
+            _popup.SearchClicked += delegate { Program.LogLine("点击胶囊: 搜索"); Search(_popup.SelectionText); };
+            _popup.SettingsClicked += delegate { Program.LogLine("点击胶囊: 设置"); OpenSettings(); };
+        }
+
+        void ShowPopupLoading(Point pt)
+        {
+            EnsurePopup();
+            _popup.ShowLoading(pt);
         }
 
         public void HidePopup()

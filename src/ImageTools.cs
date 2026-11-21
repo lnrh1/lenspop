@@ -95,10 +95,20 @@ namespace LensPop
                     bmp.Save(ms, ImageFormat.Png);
                     return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
                 }
-                var ps = new System.Drawing.Imaging.EncoderParameters(1);
-                ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 88L);
-                bmp.Save(ms, codec, ps);
-                ps.Dispose();
+
+                // JPEG 编码器对 32bpp/带 alpha 的位图会抛「参数无效」，先拍平成 24bpp 白底
+                using (var flat = new Bitmap(Math.Max(1, bmp.Width), Math.Max(1, bmp.Height), PixelFormat.Format24bppRgb))
+                {
+                    using (var g = Graphics.FromImage(flat))
+                    {
+                        g.Clear(Color.White);
+                        g.DrawImage(bmp, 0, 0, bmp.Width, bmp.Height);
+                    }
+                    var ps = new System.Drawing.Imaging.EncoderParameters(1);
+                    ps.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 88L);
+                    flat.Save(ms, codec, ps);
+                    ps.Dispose();
+                }
                 return "data:image/jpeg;base64," + Convert.ToBase64String(ms.ToArray());
             }
         }

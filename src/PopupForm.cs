@@ -5,7 +5,7 @@ using System.Windows.Forms;
 
 namespace LensPop
 {
-    /// <summary>划词后的小胶囊：翻译 / 询问 / 搜索</summary>
+    /// <summary>划词后的小胶囊：先显示「取词中…」，拿到文字再展开按钮</summary>
     public class PopupForm : Form
     {
         public event EventHandler TranslateClicked;
@@ -15,6 +15,12 @@ namespace LensPop
 
         public string SelectionText = "";
 
+        readonly FlowLayoutPanel _flow = new FlowLayoutPanel();
+        readonly Label _status = new Label();
+        readonly List<Button> _buttons = new List<Button>();
+        readonly Timer _autoHide = new Timer();
+        int _readyWidth;
+
         public PopupForm()
         {
             FormBorderStyle = FormBorderStyle.None;
@@ -22,34 +28,47 @@ namespace LensPop
             ShowInTaskbar = false;
             TopMost = true;
             BackColor = Color.FromArgb(16, 19, 26);
-            Size = new Size(208, 36);
             DoubleBuffered = true;
-            Opacity = 1.0;
+            Size = new Size(150, 36);
 
-            var flow = new FlowLayoutPanel();
-            flow.Dock = DockStyle.Fill;
-            flow.WrapContents = false;
-            flow.Padding = new Padding(4, 4, 4, 4);
-            flow.WrapContents = false;
-            flow.BackColor = BackColor;
-            Controls.Add(flow);
+            _flow.Dock = DockStyle.Fill;
+            _flow.WrapContents = false;
+            _flow.Padding = new Padding(4);
+            _flow.BackColor = BackColor;
+            Controls.Add(_flow);
 
-            flow.Controls.Add(MakeButton("译  翻译", TranslateClicked));
-            flow.Controls.Add(MakeButton("问  询问", AskClicked));
-            flow.Controls.Add(MakeButton("搜  搜索", SearchClicked));
-            var gear = MakeButton("⚙", null);
+            _buttons.Add(MakeButton("译  翻译", delegate { Raise(TranslateClicked); }));
+            _buttons.Add(MakeButton("问  询问", delegate { Raise(AskClicked); }));
+            _buttons.Add(MakeButton("搜  搜索", delegate { Raise(SearchClicked); }));
+            var gear = MakeButton("⚙", delegate { Raise(SettingsClicked); });
             gear.Width = 30;
             gear.ForeColor = Color.FromArgb(170, 180, 198);
-            gear.Click += delegate { if (SettingsClicked != null) SettingsClicked(this, EventArgs.Empty); };
-            flow.Controls.Add(gear);
+            _buttons.Add(gear);
+
+            foreach (var b in _buttons) _flow.Controls.Add(b);
+
+            _status.AutoSize = false;
+            _status.Height = 28;
+            _status.Width = 230;
+            _status.TextAlign = ContentAlignment.MiddleCenter;
+            _status.ForeColor = Color.FromArgb(233, 237, 245);
+            _status.Font = Theme.UI;
+            _status.BackColor = BackColor;
+            _status.Text = "取词中…";
+            _flow.Controls.Add(_status);
 
             int total = 8;
-            foreach (Control c in flow.Controls) total += c.Width + c.Margin.Horizontal;
-            Width = total;
-            Height = 36;
+            foreach (var b in _buttons) total += b.Width + b.Margin.Horizontal;
+            _readyWidth = total;
+
+            _autoHide.Interval = 2000;
+            _autoHide.Tick += delegate { _autoHide.Stop(); Hide(); };
+
+            Load += delegate { Theme.Round(this, 10); };
+        Resize += delegate { Theme.Round(this, 10); };
         }
 
-        Button MakeButton(string text, EventHandler handler)
+        Button MakeButton(string text, Action onClick)
         {
             var b = new Button();
             b.Text = text;
@@ -66,47 +85,69 @@ namespace LensPop
             b.TabStop = false;
             b.MouseEnter += delegate { b.BackColor = Color.FromArgb(45, 50, 62); };
             b.MouseLeave += delegate { b.BackColor = BackColor; };
-            if (handler != null)
+            b.Click += delegate
             {
-                b.Click += delegate(object s, EventArgs e)
-                {
-                    Hide();
-                    handler(this, EventArgs.Empty);
-                };
-            }
+                Hide();
+                try { onClick(); } catch { }
+            };
             return b;
         }
 
-        protected override bool ShowWithoutActivation { get { return true; } }
-
-        protected override void OnLoad(EventArgs e)
+        void Raise(EventHandler h)
         {
-            base.OnLoad(e);
-            Theme.Round(this, 10);
+            if (h != null) h(this, EventArgs.Empty);
         }
 
-        public void ShowAt(Point screenPoint, string text)
+        static void ShowButtons(List<Button> list, bool on)
         {
-            SelectionText = text;
+            foreach (var b in list) b.Visible = on;
+        }
+
+        void PlaceAt(Point screenPoint, int width)
+        {
+            Width = width;
             var scr = Screen.FromPoint(screenPoint);
-            int left = screenPoint.X - Width / 2;
+            int left = screenPoint.X - width / 2;
             int top = screenPoint.Y - Height - 12;
-            if (top < scr.WorkingArea.Top) top = screenPoint.Y + 16;
-            left = Math.Max(scr.WorkingArea.Left + 4, Math.Min(left, scr.WorkingArea.Right - Width - 4));
+            if (top < scr.WorkingArea.Top) top = screenPoint.Y + 18;
+            left = Math.Max(scr.WorkingArea.Left + 4, Math.Min(left, scr.WorkingArea.Right - width - 4));
             top = Math.Max(scr.WorkingArea.Top + 4, Math.Min(top, scr.WorkingArea.Bottom - Height - 4));
             Location = new Point(left, top);
-            Show();
+            if (!Visible) Show();
+            Theme.Round(this, 10);   // 改了宽度必须重算 Region，否则窗口被裁成半截，点按钮也点不到
             TopMost = true;
-            Theme.NoActivate(this);
+            BringToFront();
         }
 
-        protected override void OnPaint(PaintEventArgs e)
+        /// <summary>松手立刻显示：此时还没有文字</summary>
+        public void ShowLoading(Point screenPoint)
         {
-            base.OnPaint(e);
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using (var pen = new Pen(Color.FromArgb(60, 66, 80)))
-            using (var path = Theme.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), 10))
-                e.Graphics.DrawPath(pen, path);
+            _autoHide.Stop();
+            _status.Text = "取词中…";
+            _status.Visible = true;
+            ShowButtons(_buttons, false);
+            SelectionText = "";
+            PlaceAt(screenPoint, 150);
+        }
+
+        /// <summary>取到文字，展开按钮</summary>
+        public void Ready(Point screenPoint, string text)
+        {
+            _autoHide.Stop();
+            SelectionText = text;
+            _status.Visible = false;
+            ShowButtons(_buttons, true);
+            PlaceAt(screenPoint, _readyWidth);
+        }
+
+        /// <summary>没取到：给个明确提示，2 秒后自动消失</summary>
+        public void Fail(Point screenPoint, string message)
+        {
+            _status.Text = message;
+            _status.Visible = true;
+            ShowButtons(_buttons, false);
+            PlaceAt(screenPoint, 280);
+            _autoHide.Start();
         }
     }
 }
