@@ -85,9 +85,12 @@ namespace LensPop
             close.Click += delegate { Close(); };
             acts.Controls.Add(close);
 
+            var saveAs = MakeMini("另存为", 64);
+            saveAs.Click += delegate { SaveImageAs(); };
             var save = MakeMini("保存", 56);
             save.Click += delegate { SaveImage(); };
             acts.Controls.Add(save);
+            acts.Controls.Add(saveAs);
 
             var toggle = MakeMini("文字", 56);
             toggle.Click += delegate
@@ -212,42 +215,50 @@ namespace LensPop
 
         void SaveImage()
         {
-            var dlg = new SaveFileDialog();
-            dlg.Filter = "PNG 图片|*.png";
-            dlg.FileName = "lenspop-translated-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".png";
-            dlg.OverwritePrompt = true;
-            dlg.RestoreDirectory = true;
-            string dir = DefaultSaveDir();
-            try { if (System.IO.Directory.Exists(dir)) dlg.InitialDirectory = dir; } catch { }
-            if (dlg.ShowDialog(this) != DialogResult.OK) return;
-
-            if (TrySave(dlg.FileName)) { _status.Text = "已保存"; return; }
-
-            // 目标不可写：退回到应用自己的目录，并告诉用户实际位置
-            string fallbackDir = System.IO.Path.Combine(AppConfig.Dir, "exports");
-            string fallback = System.IO.Path.Combine(fallbackDir, System.IO.Path.GetFileName(dlg.FileName));
-            try
+            // 直接保存，不走系统文件对话框：对话框在提权/OneDrive 环境里经常误报无权限
+            string dir = System.IO.Path.Combine(DefaultSaveDir(), "LensPop");
+            string name = "lenspop-translated-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".png";
+            string[] targets = new string[]
             {
-                System.IO.Directory.CreateDirectory(fallbackDir);
-                if (TrySave(fallback))
+                System.IO.Path.Combine(dir, name),
+                System.IO.Path.Combine(DefaultSaveDir(), name),
+                System.IO.Path.Combine(System.IO.Path.Combine(AppConfig.Dir, "exports"), name)
+            };
+
+            foreach (string path in targets)
+            {
+                try
                 {
-                    _status.Text = "已保存到 " + fallback;
-                    var r = MessageBox.Show(this,
-                        "原路径没有写入权限：" + _nl + dlg.FileName + _nl + _nl +
-                        "已改为保存到：" + _nl + fallback + _nl + _nl + "要打开所在文件夹吗？",
-                        "保存位置已调整", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                    if (r == DialogResult.Yes)
+                    string parent = System.IO.Path.GetDirectoryName(path);
+                    if (!System.IO.Directory.Exists(parent)) System.IO.Directory.CreateDirectory(parent);
+                    if (!TrySave(path)) { Program.LogLine("保存失败(无异常) " + path); continue; }
+                    _status.Text = "已保存到 " + path;
+                    Program.LogLine("图片已保存 " + path);
+                    if (MessageBox.Show(this, "已保存到：" + _nl + path + _nl + _nl + "要打开所在文件夹吗？", "保存成功",
+                        MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
                     {
-                        try { System.Diagnostics.Process.Start("explorer.exe", "/select," + fallback); } catch { }
+                        try { System.Diagnostics.Process.Start("explorer.exe", "/select," + path); } catch { }
                     }
                     return;
                 }
+                catch (Exception ex) { Program.LogLine("保存异常 " + path + " : " + ex.GetType().Name + " " + ex.Message); }
             }
-            catch { }
 
-            MessageBox.Show(this, "保存失败，请换一个位置再试。", "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, "保存失败。可以在设置里打开配置目录，把这份图片手动另存。", "保存失败",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
+        void SaveImageAs()
+        {
+            var dlg = new SaveFileDialog();
+            dlg.Filter = "PNG 图片|*.png";
+            dlg.FileName = "lenspop-translated-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".png";
+            dlg.RestoreDirectory = true;
+            try { dlg.InitialDirectory = DefaultSaveDir(); } catch { }
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            if (TrySave(dlg.FileName)) { _status.Text = "已保存"; return; }
+            MessageBox.Show(this, "这个位置写不进去，换个目录试试。", "保存失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         bool TrySave(string path)
         {
             try
