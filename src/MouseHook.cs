@@ -69,6 +69,9 @@ namespace LensPop
         public event Action<Point> Clicked;      // 左键按下
         public event Action<Point> DragEnded;    // 拖拽后松开
         public static Action<int, int, int> RawEvent;   // 调试用：消息、x、y
+        public static int EventCount;                   // 收到多少鼠标事件
+        public static int ClickCount;                   // 左键按下次数
+        public static int DragCount;                    // 拖拽结束次数
 
         public bool Installed { get { return _hook != IntPtr.Zero; } }
         public int LastError { get { return Marshal.GetLastWin32Error(); } }
@@ -95,10 +98,12 @@ namespace LensPop
             {
                 var info = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
                 int msg = (int)wParam;
+                System.Threading.Interlocked.Increment(ref EventCount);
                 var raw = RawEvent;
                 if (raw != null) { try { raw(msg, info.pt.X, info.pt.Y); } catch { } }
                 if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN)
                 {
+                    System.Threading.Interlocked.Increment(ref ClickCount);
                     _down = new Point(info.pt.X, info.pt.Y);
                     _downValid = true;
                     var clicked = Clicked;
@@ -114,6 +119,7 @@ namespace LensPop
                     int dy = info.pt.Y - _down.Y;
                     if (Math.Abs(dx) > 6 || Math.Abs(dy) > 6)
                     {
+                        System.Threading.Interlocked.Increment(ref DragCount);
                         var up = new Point(info.pt.X, info.pt.Y);
                         var dragEnded = DragEnded;
                         if (dragEnded != null)

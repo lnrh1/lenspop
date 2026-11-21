@@ -45,7 +45,7 @@ namespace LensPop
         CheckBox _autostart;
         Button _shellBtn;
         Label _shellStatus;
-        TextBox _hkOcr, _hkCapture;
+        TextBox _hkOcr, _hkCapture, _hkTranslate;
         Label _status;
 
         public SettingsForm(AppConfig cfg)
@@ -430,6 +430,16 @@ namespace LensPop
             L(p, "截图识别", 14, 128, 110);
             _hkCapture = T(p, 200, 124, 130, false);
             Hint(p, "例如 Ctrl+Alt+S，框选屏幕区域后识别", 340, 128, 300, 20);
+
+            L(p, "翻译选中文字", 14, 204, 110);
+            _hkTranslate = T(p, 200, 200, 130, false);
+            Hint(p, "选中文字后按它直接翻译（不需要鼠标钩子）", 340, 204, 280, 20);
+
+            var diag = B(p, "运行自检", 200, 166, 100, 26);
+            diag.Click += delegate { RunDiagnostics(); };
+            var grab = B(p, "取词自测", 308, 166, 100, 26);
+            grab.Click += delegate { TestGrab(); };
+            Hint(p, "取词自测：3 秒内到别的窗口选中一段文字，程序会模拟 Ctrl+C 看能不能抓到", 416, 170, 360, 20);
 
             var openDir = B(p, "打开配置目录", 14, 168, 120, 26);
             openDir.Click += delegate
@@ -902,6 +912,7 @@ namespace LensPop
             _stream.Checked = s.Stream;
             _hkOcr.Text = s.HotkeyOcr;
             _hkCapture.Text = s.HotkeyCapture;
+            _hkTranslate.Text = s.HotkeyTranslate;
             _autostart.Checked = IsAutostart();
             UpdateShellStatus();
             UpdateSearchTplEnabled();
@@ -939,6 +950,76 @@ namespace LensPop
             }
             _cfg.Save();
             UpdateShellStatus();
+        }
+
+        /* ---------------- 自检 ---------------- */
+
+        void TestGrab()
+        {
+            SetStatusText("3 秒后模拟 Ctrl+C 取词：请先去别的窗口选中一段文字，保持它在前台…");
+            var t = new System.Windows.Forms.Timer();
+            t.Interval = 3000;
+            t.Tick += delegate
+            {
+                t.Stop();
+                t.Dispose();
+                string text = SelectionGrabber.Grab(800);
+                if (string.IsNullOrEmpty(text))
+                {
+                    MessageBox.Show(this,
+                        "没抓到文字。常见原因：\r\n\r\n" +
+                        "1. 这 3 秒里焦点不在有选中文字的窗口上，或者没真的选中\r\n" +
+                        "2. 目标窗口以管理员权限运行（普通权限拿不到）\r\n" +
+                        "3. 目标程序不支持 Ctrl+C 复制（终端、某些游戏）\r\n" +
+                        "4. 安全软件拦了模拟按键",
+                        "取词自测", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                else
+                {
+                    string show = text.Length > 200 ? text.Substring(0, 200) + "…" : text;
+                    MessageBox.Show(this, "抓到 " + text.Length + " 个字符：\r\n\r\n" + show,
+                        "取词自测", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                SetStatusText("自检完成");
+            };
+            t.Start();
+        }
+
+        void RunDiagnostics()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("LensPop 自检  " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            sb.AppendLine("版本        : " + Program.Version);
+            sb.AppendLine("配置文件    : " + AppConfig.FilePath + (File.Exists(AppConfig.FilePath) ? "（存在）" : "（还不存在）"));
+            sb.AppendLine("划词弹窗    : " + (_cfg.Settings.SelectionPopup ? "开" : "关"));
+            sb.AppendLine("鼠标事件    : " + MouseHook.EventCount + " 个（按下 " + MouseHook.ClickCount + " / 拖拽 " + MouseHook.DragCount + "）");
+            sb.AppendLine("钩子状态    : " + (MouseHook.EventCount > 0
+                ? "正常（能收到鼠标事件）"
+                : "没收到任何鼠标事件 —— 可能是钩子没装上、或被杀毒/安全软件拦截"));
+            string clip = "";
+            try { if (Clipboard.ContainsText()) clip = Clipboard.GetText(); } catch { }
+            sb.AppendLine("剪贴板文字  : " + (clip == null ? 0 : clip.Trim().Length) + " 字符");
+            sb.AppendLine("前台是本程序: " + (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id) ? "是" : "否"));
+            sb.AppendLine("图片右键菜单: " + (ShellMenu.IsRegistered() ? "已注册" : "未注册（设置 → 系统 → 注册）"));
+            uint mods;
+            uint vk;
+            sb.AppendLine("识别热键    : " + (_hkOcr.Text.Trim().Length == 0 ? "未设置" : (_hkOcr.Text + " " + (HotkeyHost.Parse(_hkOcr.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
+            sb.AppendLine("截图热键    : " + (_hkCapture.Text.Trim().Length == 0 ? "未设置" : (_hkCapture.Text + " " + (HotkeyHost.Parse(_hkCapture.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
+            sb.AppendLine("提供商      : " + _cfg.Providers.Count + " 个 / 模型池 " + _cfg.Pool.Count + " 个");
+            sb.AppendLine("角色        : 翻译=" + RoleName("translate") + " OCR=" + RoleName("ocr") + " 询问=" + RoleName("ask"));
+
+            string path = Path.Combine(AppConfig.Dir, "diag.txt");
+            try { File.WriteAllText(path, sb.ToString(), new System.Text.UTF8Encoding(false)); } catch { }
+            sb.AppendLine();
+            sb.AppendLine("已保存到：" + path);
+            MessageBox.Show(this, sb.ToString(), "自检结果", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            SetStatusText("自检完成");
+        }
+
+        string RoleName(string role)
+        {
+            var item = _cfg.FindPool(_cfg.Roles.ContainsKey(role) ? _cfg.Roles[role] : null);
+            return item == null ? "未设置" : item.Model;
         }
 
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -1015,6 +1096,14 @@ namespace LensPop
                 return false;
             }
             s.HotkeyCapture = hc;
+
+            string ht = _hkTranslate.Text.Trim();
+            if (ht.Length > 0 && !HotkeyHost.Parse(ht, out mods, out vk))
+            {
+                _status.Text = "翻译热键格式不对：" + ht;
+                return false;
+            }
+            s.HotkeyTranslate = ht;
 
             // 提示词
             StashPrompt();

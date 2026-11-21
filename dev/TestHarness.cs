@@ -357,17 +357,44 @@ namespace LensPopTests
     }
 
 
-    /// <summary>钩子调试：打印收到的鼠标消息（--hook-debug）</summary>
+    /// <summary>钩子调试：用 SendInput 模拟拖拽并打印钩子收到的消息（--hook-debug）</summary>
     static class HookDebug
     {
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         static extern bool SetCursorPos(int x, int y);
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        struct INPUT
+        {
+            public uint type;
+            public MOUSEINPUT mi;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        static extern uint SendInput(uint n, INPUT[] inputs, int size);
+
+        static void Send(uint flags)
+        {
+            var arr = new INPUT[1];
+            arr[0].type = 0;
+            arr[0].mi.dwFlags = flags;
+            uint r = SendInput(1, arr, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT)));
+            if (r == 0) Console.WriteLine("SendInput 失败 err=" + System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+        }
 
         public static int Run()
         {
-            Application.EnableVisualStyles();
             var hook = new LensPop.MouseHook();
             LensPop.MouseHook.RawEvent = delegate(int msg, int x, int y)
             {
@@ -379,7 +406,7 @@ namespace LensPopTests
             var th = new System.Threading.Thread(delegate()
             {
                 bool ok = hook.Install();
-                Console.WriteLine("installed=" + ok);
+                Console.WriteLine("installed=" + ok + " err=" + hook.LastError);
                 LensPop.MessagePump.Run();
                 Console.WriteLine("pump exited");
             });
@@ -392,17 +419,18 @@ namespace LensPopTests
                 System.Threading.Thread.Sleep(1500);
                 SetCursorPos(320, 320);
                 System.Threading.Thread.Sleep(200);
-                mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);
-                System.Threading.Thread.Sleep(150);
+                Send(0x0002);
+                System.Threading.Thread.Sleep(200);
                 SetCursorPos(560, 350);
                 System.Threading.Thread.Sleep(200);
-                mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);
-                System.Threading.Thread.Sleep(1000);
+                Send(0x0004);
+                System.Threading.Thread.Sleep(1200);
+                Console.WriteLine("events=" + LensPop.MouseHook.EventCount + " clicks=" + LensPop.MouseHook.ClickCount + " drags=" + LensPop.MouseHook.DragCount);
                 Environment.Exit(0);
             });
             t2.IsBackground = true;
             t2.Start();
-            System.Threading.Thread.Sleep(5000);
+            System.Threading.Thread.Sleep(6000);
             return 0;
         }
     }

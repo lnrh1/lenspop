@@ -176,7 +176,21 @@ namespace LensPop
                     _hook = new MouseHook();
                     _hook.Clicked += delegate(Point pt) { Post(delegate { OnGlobalClick(pt); }); };
                     _hook.DragEnded += delegate(Point pt) { Post(delegate { OnDragEnded(pt); }); };
-                    _hook.Install();
+                    bool ok = _hook.Install();
+                    Program.LogLine("钩子安装=" + ok + (ok ? "" : (" 错误码=" + _hook.LastError)));
+                    if (!ok)
+                    {
+                        Post(delegate
+                        {
+                            try
+                            {
+                                _tray.BalloonTipTitle = "划词功能没起来";
+                                _tray.BalloonTipText = "全局鼠标钩子安装失败（可能被安全软件拦了）。打开设置 → 系统 → 运行自检 看详情。";
+                                _tray.ShowBalloonTip(6000);
+                            }
+                            catch { }
+                        });
+                    }
                     MessagePump.Run();
                 }
                 catch (Exception e)
@@ -279,10 +293,32 @@ namespace LensPop
             string hkOcr = string.IsNullOrEmpty(_cfg.Settings.HotkeyOcr) ? "" : "（" + _cfg.Settings.HotkeyOcr + "）";
             string hkCap = string.IsNullOrEmpty(_cfg.Settings.HotkeyCapture) ? "" : "（" + _cfg.Settings.HotkeyCapture + "）";
 
+            string hkT = string.IsNullOrEmpty(_cfg.Settings.HotkeyTranslate) ? "" : "（" + _cfg.Settings.HotkeyTranslate + "）";
+            m.Items.Add("翻译选中文字" + hkT, null, delegate { TranslateSelection(); });
+            m.Items.Add(new ToolStripSeparator());
             m.Items.Add("识别剪贴板图片" + hkOcr, null, delegate { OcrClipboard(); });
             m.Items.Add("翻译剪贴板图片", null, delegate { TranslateClipboard(); });
             m.Items.Add("截图识别" + hkCap, null, delegate { Capture(false); });
             m.Items.Add("截图翻译", null, delegate { Capture(true); });
+            m.Items.Add(new ToolStripSeparator());
+            bool shellOn = ShellMenu.IsRegistered();
+            m.Items.Add(shellOn ? "注销图片右键菜单" : "注册图片右键菜单", null, delegate
+            {
+                if (ShellMenu.IsRegistered()) ShellMenu.Unregister();
+                else ShellMenu.Register();
+                _cfg.Settings.ShellMenu = ShellMenu.IsRegistered();
+                _cfg.Save();
+                BuildMenu();
+                try
+                {
+                    _tray.BalloonTipTitle = "图片右键菜单";
+                    _tray.BalloonTipText = _cfg.Settings.ShellMenu
+                        ? "已注册。Win11 需要在图片上右键 →「显示更多选项」里找 LensPop。"
+                        : "已注销。";
+                    _tray.ShowBalloonTip(4000);
+                }
+                catch { }
+            });
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add("打开配置目录", null, delegate
             {
@@ -310,6 +346,8 @@ namespace LensPop
             if (!string.IsNullOrEmpty(hk)) _hotkeys.Register(hk, delegate { OcrClipboard(); });
             string hc = _cfg.Settings.HotkeyCapture;
             if (!string.IsNullOrEmpty(hc)) _hotkeys.Register(hc, delegate { Capture(false); });
+            string ht = _cfg.Settings.HotkeyTranslate;
+            if (!string.IsNullOrEmpty(ht)) _hotkeys.Register(ht, delegate { TranslateSelection(); });
         }
 
         void OpenSettings()
@@ -349,12 +387,14 @@ namespace LensPop
 
         void OnDragEnded(Point pt)
         {
+            Program.LogLine("拖拽结束 @" + pt.X + "," + pt.Y + " 划词开关=" + _cfg.Settings.SelectionPopup);
             if (!_cfg.Settings.SelectionPopup) return;
             // 在自己的窗口里拖选文字（设置、结果窗）不要弹划词，也别去抢剪贴板
             if (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id)) return;
             ThreadPool.QueueUserWorkItem(delegate
             {
                 string text = SelectionGrabber.Grab(500);
+                Program.LogLine("取词结果长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
                 if (string.IsNullOrEmpty(text)) return;
                 text = text.Trim();
                 if (text.Length < 2) return;
@@ -369,6 +409,7 @@ namespace LensPop
 
         void ShowPopup(Point pt, string text)
         {
+            Program.LogLine("弹出划词条");
             if (_popup == null)
             {
                 _popup = new PopupForm();
@@ -446,6 +487,19 @@ namespace LensPop
             {
                 return null;
             }
+        }
+
+        /// <summary>不依赖鼠标钩子的取词路径：按热键 → 模拟 Ctrl+C → 直接翻译</summary>
+        void TranslateSelection()
+        {
+            Program.LogLine("热键取词");
+            string text = SelectionGrabber.Grab(700);
+            if (string.IsNullOrEmpty(text) || text.Trim().Length == 0)
+            {
+                Program.Info("没抓到选中文字。\r\n\r\n· 先在别的窗口里选中一段文字再按热键\r\n· 管理员权限的窗口需要 LensPop 也用管理员身份运行\r\n· 终端窗口不支持 Ctrl+C 复制");
+                return;
+            }
+            OpenTranslate(text.Trim());
         }
 
         void OcrClipboard()
