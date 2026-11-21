@@ -10,6 +10,7 @@ namespace LensPop
     public class SettingsForm : Form
     {
         TabControl _tabs;
+        CheckBox _runAsAdmin;
         public static int StartupTab = -1;
         readonly AppConfig _cfg;
         bool _loading = true;
@@ -461,41 +462,48 @@ namespace LensPop
             _autostart.Font = Theme.UI;
             p.Controls.Add(_autostart);
 
-            L(p, "图片右键菜单", 14, 58, 100);
-            _shellBtn = B(p, "注册", 130, 52, 90, 26);
+            _runAsAdmin = new CheckBox();
+            _runAsAdmin.Text = "以管理员身份运行（托盘图标与取词更可靠，启动时会弹 UAC）";
+            _runAsAdmin.Location = new Point(14, 46);
+            _runAsAdmin.Width = 520;
+            _runAsAdmin.Font = Theme.UI;
+            _runAsAdmin.ForeColor = Theme.Fg;
+            p.Controls.Add(_runAsAdmin);
+            L(p, "图片右键菜单", 14, 92, 100);
+            _shellBtn = B(p, "注册", 130, 86, 90, 26);
             _shellBtn.Click += delegate { ToggleShell(); };
-            _shellStatus = Hint(p, "", 232, 58, 480, 20);
+            _shellStatus = Hint(p, "", 232, 92, 480, 20);
 
-            L(p, "截图（复制/提取）", 14, 96, 150);
-            _hkShot = T(p, 200, 92, 130, false);
-            Hint(p, "例如 Ctrl+Alt+A", 340, 96, 300, 20);
+            L(p, "截图（复制/提取）", 14, 130, 150);
+            _hkShot = T(p, 200, 126, 130, false);
+            Hint(p, "例如 Ctrl+Alt+A", 340, 130, 300, 20);
 
-            L(p, "截图识别", 14, 128, 110);
-            _hkCapture = T(p, 200, 124, 130, false);
-            Hint(p, "例如 Ctrl+Alt+S，框选屏幕区域后识别", 340, 128, 300, 20);
+            L(p, "截图识别", 14, 162, 110);
+            _hkCapture = T(p, 200, 158, 130, false);
+            Hint(p, "例如 Ctrl+Alt+S，框选屏幕区域后识别", 340, 162, 300, 20);
 
-            L(p, "翻译选中文字", 14, 160, 110);
-            _hkTranslate = T(p, 200, 156, 130, false);
-            Hint(p, "选中文字后按它直接翻译（不需要鼠标钩子）", 340, 160, 320, 20);
+            L(p, "翻译选中文字", 14, 194, 110);
+            _hkTranslate = T(p, 200, 190, 130, false);
+            Hint(p, "选中文字后按它直接翻译（不需要鼠标钩子）", 340, 194, 320, 20);
 
-            var diag = B(p, "运行自检", 14, 196, 100, 26);
+            var diag = B(p, "运行自检", 14, 230, 100, 26);
             diag.Click += delegate { RunDiagnostics(); };
-            var grab = B(p, "取词自测", 122, 196, 100, 26);
+            var grab = B(p, "取词自测", 122, 230, 100, 26);
             grab.Click += delegate { TestGrab(); };
-            var popBtn = B(p, "测试弹层", 230, 196, 100, 26);
+            var popBtn = B(p, "测试弹层", 230, 230, 100, 26);
             popBtn.Click += delegate { TestPopup(); };
-            Hint(p, "取词自测：在弹出的窗口里选中示例文字，验证取词链路。", 14, 228, 700, 20);
+            Hint(p, "取词自测：在弹出的窗口里选中示例文字，验证取词链路。", 14, 262, 700, 20);
 
-            var exportBtn = B(p, "导出配置", 14, 262, 100, 26);
+            var exportBtn = B(p, "导出配置", 14, 296, 100, 26);
             exportBtn.Click += delegate { ExportConfig(); };
-            var importBtn = B(p, "导入配置", 122, 262, 100, 26);
+            var importBtn = B(p, "导入配置", 122, 296, 100, 26);
             importBtn.Click += delegate { ImportConfig(); };
-            var openDir = B(p, "打开配置目录", 230, 262, 110, 26);
+            var openDir = B(p, "打开配置目录", 230, 296, 110, 26);
             openDir.Click += delegate
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", AppConfig.Dir); } catch { }
             };
-            var aboutBtn = B(p, "关于 LensPop", 348, 262, 110, 26);
+            var aboutBtn = B(p, "关于 LensPop", 348, 296, 110, 26);
             aboutBtn.Click += delegate
             {
                 MessageBox.Show(this,
@@ -506,8 +514,8 @@ namespace LensPop
                     "（API Key 以明文存在 config.json 里，换机器时注意别误传）",
                     "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
-            Hint(p, "换机器时用导出 / 导入搬配置（模型池、Key、提示词都在 config.json 里）。", 14, 294, 700, 20);
-            Hint(p, "配置同时写一份 config.bak.json 作为自动备份；读不出来时自动回退。", 14, 320, 700, 20);
+            Hint(p, "换机器时用导出 / 导入搬配置（模型池、Key、提示词都在 config.json 里）。", 14, 328, 700, 20);
+            Hint(p, "配置同时写一份 config.bak.json 作为自动备份；读不出来时自动回退。", 14, 352, 700, 20);
         }
 
         /* ---------------- 提供商 ---------------- */
@@ -992,6 +1000,7 @@ namespace LensPop
             _timeout.Value = Math.Max(10, Math.Min(600, s.TimeoutSec));
             _selPopup.Checked = s.SelectionPopup;
             _stream.Checked = s.Stream;
+            _runAsAdmin.Checked = s.RunAsAdmin;
             _hkShot.Text = s.HotkeyShot;
             _hkCapture.Text = s.HotkeyCapture;
             _hkTranslate.Text = s.HotkeyTranslate;
@@ -1298,6 +1307,7 @@ namespace LensPop
                 return false;
             }
             s.HotkeyShot = hshot;
+            s.RunAsAdmin = _runAsAdmin.Checked;
             string hc = _hkCapture.Text.Trim();
             if (hc.Length > 0 && !HotkeyHost.Parse(hc, out mods, out vk))
             {

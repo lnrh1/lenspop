@@ -47,6 +47,7 @@ namespace LensPop
         public string HotkeyTranslate = "Ctrl+Alt+T";
         public string HotkeyShot = "Ctrl+Alt+A";
         public bool Autostart = false;
+        public bool RunAsAdmin = true;
         public bool ShellMenu = false;
         public Prompts Prompts = new Prompts();
     }

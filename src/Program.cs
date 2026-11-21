@@ -36,6 +36,23 @@ namespace LensPop
                 return;
             }
 
+            // 托盘图标与取词在部分机器上需要管理员权限：默认请求提权重启（可在设置里关掉）
+            try
+            {
+                var boot = AppConfig.Load();
+                bool testLaunch = HasFlag(args, "--shot") || HasFlag(args, "--shotbar-demo") || HasFlag(args, "--no-elevate");
+                if (!testLaunch && boot.Settings.RunAsAdmin && !IsAdmin())
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo(Application.ExecutablePath);
+                    psi.UseShellExecute = true;
+                    psi.Verb = "runas";
+                    psi.Arguments = "--elevated";
+                    System.Diagnostics.Process.Start(psi);
+                    LogLine("已请求以管理员身份重启");
+                    return;
+                }
+            }
+            catch (Exception ex) { LogLine("提权被取消或失败，按普通权限继续: " + ex.Message); }
             Application.ThreadException += delegate(object s, System.Threading.ThreadExceptionEventArgs e) { Fatal(e.Exception); };
             AppDomain.CurrentDomain.UnhandledException += delegate(object s, UnhandledExceptionEventArgs e) { Fatal(e.ExceptionObject as Exception); };
 
