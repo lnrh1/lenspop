@@ -1,150 +1,207 @@
 # LensPop · 划词透镜
 
-> 划词即译、即问、即搜；右键图片识别文字，图片翻译会把译文**贴回原图**。
-> Windows 单文件绿色版：下载一个 exe，双击就能用，不用装运行时、不用装浏览器扩展。
+Windows 单文件划词工具：**任意软件里划词 → 翻译 / 询问 / 搜索**；**右键图片 → 识别文字，或把译文贴回原图**。
+一个 exe，约 140 KB，绿色免安装，MIT。
 
-![license](https://img.shields.io/badge/license-MIT-4f46e5)
-![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0ea5e9)
-![size](https://img.shields.io/badge/exe-~140KB-22c55e)
-![deps](https://img.shields.io/badge/dependencies-none-black)
-
-![图片翻译示例](docs/example-image-translate.png)
-
-*上图是自测用例：原文（英文）被按原字号、原位置、原文字色换成中文；空间不够就自动缩小字号，不往空白区域乱扩。*
-
-## 长什么样
-
-| 划词后的小胶囊 | 询问（右上角可选思考档位） |
-| --- | --- |
-| ![划词小胶囊](docs/ui-popup.png) | ![询问窗](docs/ui-ask.png) |
-
-| 翻译结果窗 | 图片翻译结果窗 |
-| --- | --- |
-| ![翻译窗](docs/ui-translate.png) | ![图片翻译](docs/ui-image.png) |
-
-设置窗口（提供商 / 模型池 · 角色 / 行为 / 提示词 / 系统）：
-
-![设置](docs/ui-settings.png)
+- 平台：Windows 10 / 11（需要系统自带的 .NET Framework 4.8，Win10 1903+ 与 Win11 都自带）
+- 依赖：无运行时打包、无 Electron / WebView2 / Node、无后台服务
+- 接入：任何 OpenAI 兼容 API；内置 DeepSeek、Kimi、智谱 GLM、通义千问、硅基流动、OpenRouter、火山方舟、腾讯混元、百度千帆、OpenAI、Gemini、Ollama
 
 ---
 
-## 它能干什么
+## 功能
 
-| 场景 | 操作 | 结果 |
-| --- | --- | --- |
-| 翻译选中文字 | 在任意软件里划词 → 点「译 翻译」 | 鼠标旁弹出结果窗，流式出译文 |
-| 就选中的内容提问 | 划词 → 点「问 询问」 | 弹窗里输入问题，可切换**思考档位** |
-| 搜索选中文字 | 划词 → 点「搜 搜索」 | 用系统默认浏览器打开搜索页 |
-| 识别图片文字 | 在图片文件上右键 → LensPop 识别文字 | 弹出识别结果，可复制 |
-| 翻译图片并贴回原图 | 在图片文件上右键 → LensPop 翻译图片 | 生成一张「译文在原位」的新图 |
-| 识别 / 翻译屏幕区域 | 快捷键框选 → 自动识别或翻译 | 同上 |
-| 识别 / 翻译剪贴板图片 | 托盘菜单或快捷键 | 同上 |
+**划词（任意程序：浏览器、PDF、微信、Office、记事本…）**
 
-划词不挑软件：浏览器、PDF 阅读器、微信、Office、记事本都行。
+| 按钮 | 行为 |
+| --- | --- |
+| 译 翻译 | 鼠标旁弹出结果窗，按设定的目标语言流式输出译文 |
+| 问 询问 | 弹窗内输入问题，可切换**思考档位**，支持多轮追问 |
+| 搜 搜索 | 用系统默认浏览器打开搜索引擎 |
+| ⚙ | 打开设置 |
 
-## 为什么这么小
+**图片**
 
-- 单个 `LensPop.exe`，约 140 KB，绿色免安装，删掉即卸载。
-- 只用 Windows 自带的 .NET Framework 4.8（Win10 1903+ / Win11 默认就有），**不打包运行时**。
-- 无 Electron、无 WebView2、无 Node、无后台服务，托盘里一个图标。
-- 所有 AI 请求由本机直连你自己填的 API，不经过任何中间服务器。
+| 入口 | 行为 |
+| --- | --- |
+| 图片文件右键 → LensPop 识别文字 | 调 OCR 模型识别图中文字，弹出可复制的结果窗 |
+| 图片文件右键 → LensPop 翻译图片（贴回原图） | 先逐行识别框和文字颜色，再翻译，最后把译文**按原位置、原字号、原文字色**写回原图 |
+| 热键框选屏幕区域（默认 Ctrl+Alt+S） | 截图后识别（网页里的图片就用这个） |
+| 热键识别剪贴板图片（默认 Ctrl+Alt+O） | Win+Shift+S 截图后直接识别 |
+| 托盘菜单 | 以上四种图片操作的入口 |
 
-## 下载与安装
+**模型接入**
 
-1. 到 Releases 下载 `LensPop-1.0.0-win.zip`，解压得到 `LensPop.exe`。
-2. 双击运行，托盘出现紫色放大镜图标（第一次可右键托盘 → 设置）。
+- 内置 12 家预设 + 自定义，全部走 OpenAI 兼容协议（GET 服务地址/models、POST 服务地址/chat/completions）
+- 填好 Base URL 与 API Key →「获取模型」→ 从列表里挑模型「存入模型池」
+- 模型池里再分别指定三个角色：**翻译 / OCR / 询问**（询问留空则复用翻译）
+- 翻译与 OCR **一律不思考**，只有询问可按档位开思考
+
+---
+
+## 安装
+
+1. 到 Releases 下载 LensPop-1.0.0-win.zip，解压得到 LensPop.exe。
+2. 双击运行，托盘出现紫色放大镜图标（右键托盘 → 设置）。
 3. 想用图片右键菜单：设置 → 系统 → 注册（只写当前用户注册表，不需要管理员）。
 
-> 未签名 exe 可能被 SmartScreen 提示，点「更多信息 → 仍要运行」即可。源码就在本仓库，可自行 `build.cmd` 编译。
+> 未签名 exe 可能被 SmartScreen 提示：更多信息 → 仍要运行。也可以自己用 build.cmd 编译。
 
-## 第一次配置（三步）
+---
 
-1. **提供商**：设置 → 提供商 → 新增 → 选预设（DeepSeek / Kimi / GLM / 通义 / 硅基流动 / OpenRouter / 豆包 / OpenAI / Gemini / Ollama / 自定义）→ 填 Base URL 和 API Key。
-2. **获取模型**：点「获取模型」，列表出来后点一个 →「存入模型池」（也可全部存入）。模型名不在列表里可以手填。
-3. **选角色**：设置 → 模型池 · 角色 → 分别选
-   - 翻译模型（便宜的快模型即可）
-   - OCR 模型（**必须能读图**：名字里常带 `vl` / `vision` / `4v`，列表里会标「可读图」）
-   - 询问模型（留空则复用翻译模型）
+## 配置
 
-内置预设都走 OpenAI 兼容协议（`GET {base}/models`、`POST {base}/chat/completions`），中转站、自建网关也能填。
+配置入口：托盘图标右键 →「设置…」，共五个标签页。
 
-## 思考档位：翻译 / OCR 从不思考
+### 1. 提供商
 
-思考很拖时间，所以：
+1. 点「新增」（或选中已有项）。
+2. 选「预设」，会自动填好 Base URL；「显示名称」随便起。
+3. 填 API Key。
+4. 点「获取模型」。
 
-- **翻译、OCR、图片翻译**：一律显式关闭思考（`thinking.type=disabled` / `reasoning_effort=none` / `enable_thinking=false`，按模型家族自动挑参数）。
-- **询问**：结果窗右上角有「思考」下拉，默认**关闭**；想让它多想一会儿就在提问前切一档。
-
-各家的档位都按官方参数适配过（聚合类不做猜测）：
-
-| 模型家族 | 可用档位 | 关掉思考的写法 |
+| 预设 | Base URL | 备注 |
 | --- | --- | --- |
-| DeepSeek（deepseek-flash / v4-pro …） | 默认 / 关闭 / 低 / 高 / 最高 | `thinking.type=disabled` + `reasoning_effort=none` |
-| Kimi K3 / K3.1 Pro | 默认 / 低 / 高 / 最高 | 关不掉，只能 `reasoning_effort=low` |
-| GLM-5.x | 默认 / 低 / 高 / 最高 | 关不掉，只能 `reasoning_effort=low` |
-| GLM-4.x | 默认 / 关闭 / 开启 | `thinking.type=disabled` |
-| 通义千问 Qwen3 | 默认 / 关闭 / 开启 | `enable_thinking=false` |
-| OpenAI GPT-5 / o 系列 | 默认 / 极简 / 低 / 中 / 高 | `reasoning_effort=minimal` |
-| Gemini | 默认 / 极简 / 低 / 中 / 高 | `reasoning_effort=minimal` |
-| 豆包 Seed | 默认 / 关闭 / 低 / 高 | `thinking.type=disabled` |
-| OpenRouter / 硅基流动 / 自定义 / Ollama | 只有「默认」 | 不发参数，用模型自己的默认 |
+| DeepSeek | https://api.deepseek.com/v1 | deepseek-flash 便宜，适合翻译；纯文本，不能 OCR |
+| Kimi · 月之暗面 | https://api.moonshot.cn/v1 | 视觉模型可读图 |
+| 智谱 GLM | https://open.bigmodel.cn/api/paas/v4 | glm-4v 系列可读图 |
+| 阿里云百炼 · 通义千问 | https://dashscope.aliyuncs.com/compatible-mode/v1 | qwen-vl 系列可读图 |
+| 硅基流动 | https://api.siliconflow.cn/v1 | 聚合，便宜，可读图 |
+| OpenRouter | https://openrouter.ai/api/v1 | 一个 Key 通吃，可读图 |
+| 火山方舟 · 豆包 | https://ark.cn-beijing.volces.com/api/v3 | 模型名填接入点 ep-xxxx 或豆包模型名 |
+| 腾讯混元 | https://api.hunyuan.cloud.tencent.com/v1 | hunyuan-vision 可读图 |
+| 百度千帆 | https://qianfan.baidubce.com/v2 | OpenAI 兼容模式 |
+| OpenAI | https://api.openai.com/v1 | gpt-4o-mini 便宜且能读图 |
+| Gemini | https://generativelanguage.googleapis.com/v1beta/openai | 有免费额度 |
+| Ollama 本地 | http://127.0.0.1:11434/v1 | 全本地免费，Key 随便填 |
+| 自定义 | 自己填 | 中转站 / 自建网关都行 |
 
-服务端若不认这些参数（返回 400/422），客户端会自动去掉思考参数重试一次，不会把请求打挂。
+> 模型名不在列表里（比如第三方中转没实现 /models）也没关系：可以手填模型名后存入模型池。
 
-## 图片翻译是怎么「贴回去」的
+### 2. 模型池 · 角色
 
-1. 视觉模型返回每一行文字的框、颜色和原文（JSON）。
+- 上方列表是模型池，每一条都标了「可读图」与否。
+- 下面三个下拉：
+
+| 角色 | 用途 | 怎么选 |
+| --- | --- | --- |
+| 翻译模型 | 划词翻译、图片翻译的文本翻译 | 选便宜快的文本模型即可 |
+| OCR 模型 | 识别图片文字、定位图片里的行 | **必须能读图**（名字常带 vl / vision / 4v） |
+| 询问模型 | 划词「询问」 | 可选强一点的模型，留空则用翻译模型 |
+
+- 「询问默认档位」决定询问窗里思考档位的初始值，默认「关闭」。
+- 右侧「测试翻译模型」可以直接确认 Key / Base URL 有没有填对。
+
+### 3. 行为
+
+| 设置 | 说明 |
+| --- | --- |
+| 目标语言 | 翻译成什么语言（14 个常用选项，也可以自己输入） |
+| 搜索引擎 / 自定义模板 | 划词「搜索」用哪个引擎；自定义模板里用 %s 代表关键词 |
+| 温度 | 0~2，翻译建议 0.2~0.3 |
+| 最大输出 tokens | 0 表示不限制 |
+| 请求超时 | 秒；长文档或慢模型可调大 |
+| 划词弹窗 | 关掉就只能靠右键菜单和热键 |
+| 流式输出 | 边生成边显示，关掉则一次性返回 |
+
+### 4. 提示词
+
+| 段 | 作用 |
+| --- | --- |
+| 翻译 | 划词翻译 / 图片文本翻译共用的系统提示词 |
+| 询问 | 询问助手的人设与回答风格 |
+| 图片识字 | 纯 OCR 的指令 |
+| 图片逐行定位 | 要求模型返回每行文字的 JSON（框 + 颜色） |
+| 逐行翻译 | 把整批行文本按顺序翻译成 JSON 数组 |
+
+留空就用内置默认提示词；{TARGET_LANG} 会被替换成目标语言。
+
+### 5. 系统
+
+- 开机自启（写当前用户 Run 键）
+- 图片右键菜单：注册 / 注销
+- 两个全局热键（格式如 Ctrl+Alt+O，支持 Ctrl / Alt / Shift / Win + 字母或 F1~F12）
+- 打开配置目录、关于
+
+---
+
+## 思考档位
+
+翻译、OCR、图片翻译**从不思考**（速度快），询问默认也不思考，需要时可以手动切。
+
+| 模型家族 | 可选档位 | 关闭思考的写法 |
+| --- | --- | --- |
+| DeepSeek（deepseek-flash / v4-pro …） | 默认 / 关闭 / 低 / 高 / 最高 | thinking.type=disabled + reasoning_effort=none |
+| Kimi K3 / K3.1 Pro | 默认 / 低 / 高 / 最高 | 关不掉，只能 reasoning_effort=low |
+| GLM-5.x | 默认 / 低 / 高 / 最高 | 关不掉，只能 reasoning_effort=low |
+| GLM-4.x | 默认 / 关闭 / 开启 | thinking.type=disabled |
+| 通义千问 Qwen3 | 默认 / 关闭 / 开启 | enable_thinking=false |
+| OpenAI GPT-5 / o 系列 | 默认 / 极简 / 低 / 中 / 高 | reasoning_effort=minimal |
+| Gemini | 默认 / 极简 / 低 / 中 / 高 | reasoning_effort=minimal |
+| 豆包 Seed | 默认 / 关闭 / 低 / 高 | thinking.type=disabled |
+| OpenRouter / 硅基流动 / 自定义 / Ollama | 只有「默认」 | 不发参数，用模型自身默认 |
+
+「默认」= 一个参数都不发，等于沿用各家自己的默认设置。服务端若不认这些参数（400/422），客户端会自动去掉参数重试一次。
+
+---
+
+## 图片翻译是怎么贴回去的
+
+1. 视觉模型返回每一行文字的框、颜色、原文（JSON）。
 2. 翻译模型把整批行文本翻成目标语言（一次请求，顺序一一对应）。
-3. 在本机用 GDI+ 处理：
-   - 只擦掉**原来那一行字**所占的区域，不往旁边扩、不开空白区；
+3. 本机用 GDI+ 处理：
+   - 只擦掉**原来那一行字**的区域，不往旁边扩、不开空白区；
    - 用原图底色填充，用**原文字的颜色**绘制译文；
-   - 字号从原高度往下收，收到底还放不下就按最小字号直接替换原文；
+   - 字号从原高度往下收，收到底仍放不下就按最小字号直接替换；
    - 模型给的框比原文窄时，先按原文字号量出真实宽度，把多出来的原文一起擦掉，避免留下「半截单词」。
 
-结果窗里可以「保存图片」「文字对照」，点图可看大图。
+结果窗可「保存」图片、「文字」对照，点图看大图。
 
-## 快捷键与托盘
+![示例：英文原文被按原位置、原字号、原文字色替换为中文；空间不够的自动缩小字号](docs/example-image-translate.png)
 
-| 动作 | 默认 |
-| --- | --- |
-| 识别剪贴板图片 | `Ctrl+Alt+O` |
-| 框选屏幕区域识别 | `Ctrl+Alt+S` |
+---
 
-托盘菜单：设置 / 划词弹窗开关 / 识别·翻译剪贴板图片 / 截图识别·翻译 / 打开配置目录 / 退出。
-快捷键、开机自启、右键菜单注册都在「设置 → 系统」里。
+## 常见问题
+
+- **401 / 403**：Key 错、过期，或这个 Key 没有该模型权限。
+- **404**：Base URL 少了 / 多了 /v1，或模型名不对。
+- **429**：限流或余额不足。
+- **图片识别报「不支持读图」**：OCR 角色选了纯文本模型，换 vl / vision / 4v 类模型。
+- **取不到网页里的图片**：右键菜单只对本地图片文件生效；网页图片用 Ctrl+Alt+S 框选。
+- **某些窗口划词不弹**：以管理员权限运行的窗口，普通权限抓不到钩子，把 LensPop 也用管理员身份运行。
+- **终端里划词无效**：终端里 Ctrl+C 是中断信号，划词取词会打断命令，别在终端里划词。
+- **全屏独占游戏 / 受保护视频**：取不到像素。
+
+---
 
 ## 数据与隐私
 
-- API Key、模型池、提示词存在 `%APPDATA%\LensPop\config.json`（**明文**，和大多数本地工具一样；别把这个文件传给别人）。
-- 请求只发往你自己配置的 Base URL；没有遥测、没有统计、没有云端账户。
-- 图片会先缩到最长边 1600px 再上传，省 token 也省流量。
+- API Key、模型池、提示词存在 %APPDATA%\LensPop\config.json（**明文**，和大多数本地工具一样；别把这文件发给别人）。
+- 所有请求直连你自己配置的 Base URL，不经过任何中间服务器；无遥测、无账号。
+- 图片先缩到最长边 1600px 再上传，省 token 也省流量。
+- 划词取词靠模拟一次 Ctrl+C，会临时改写剪贴板（大部分划词工具都这样）。
 
-## 已知限制
-
-- **划词靠模拟一次 `Ctrl+C`** 读取选中内容，所以会临时改写剪贴板（大多数划词工具都这样）。终端里 `Ctrl+C` 是中断信号，别在终端里划词。
-- 少数以管理员权限运行的窗口，普通权限的 LensPop 抓不到钩子/热键；需要的话用管理员身份运行。
-- 图片右键菜单是资源管理器菜单；网页里的图片请用「截图识别」（`Ctrl+Alt+S` 框选）。
-- 全屏独占游戏、受保护视频画面上取不到像素。
-- OCR 模型必须支持读图；纯文本模型（如 `deepseek-flash`）只能当翻译/询问模型。
+---
 
 ## 开发与构建
 
-不需要 Visual Studio，也不需要 .NET SDK，用系统自带的 C# 编译器即可：
+不需要 Visual Studio 或 .NET SDK，用系统自带的 C# 编译器：
 
 ```bat
 build.cmd
 ```
 
-产物 `dist\LensPop.exe`（.NET Framework 4.8 / C# 5 语法，Win10+ 直接跑）。
+产物 dist\LensPop.exe（.NET Framework 4.8 / C# 5，Win10+ 直接运行）。
 
-自测（假 API 服务 + 出图验证，不需要真实 Key）：
+自测（本地假 API 服务 + 出图验证，不需要真实 Key）：
 
 ```bat
 dev-test.cmd
 dist\test-harness.exe
 ```
 
-会打印模型列表/流式解析结果、思考档位映射，并生成 `dist\test-compose.png` 供肉眼检查排版。
+会打印模型列表 / 流式解析结果 / 思考档位映射，并生成 dist\test-compose.png 供检查排版。
+带 --ui 参数时依次显示各窗口并截图到 dev\shots\（需要在交互桌面会话里运行）。
 
 ### 目录结构
 
@@ -153,7 +210,7 @@ src/Config.cs          配置模型（JSON 读写、角色解析）
 src/Providers.cs       内置提供商预设
 src/Thinking.cs        思考档位适配（各家参数）
 src/Api.cs             OpenAI 兼容客户端（/models、SSE 流式）
-src/ImageTools.cs      取图/缩放/布局 JSON 解析/译文排版
+src/ImageTools.cs      取图 / 缩放 / 布局 JSON 解析 / 译文排版
 src/MouseHook.cs       全局鼠标钩子 + Ctrl+C 取词
 src/CaptureForm.cs     框选截图
 src/PopupForm.cs       划词小胶囊
@@ -166,4 +223,4 @@ src/Program.cs         托盘、热键、图片流水线
 
 ## License
 
-MIT © 2025 lnrh1
+MIT
