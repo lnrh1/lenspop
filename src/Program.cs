@@ -659,7 +659,7 @@ namespace LensPop
         void OnGlobalClick(Point pt)
         {
             if (_popup == null || !_popup.Visible) return;
-            if (_popup.Bounds.Contains(pt)) return;
+            if (_popup.Bounds.Contains(Cursor.Position)) return;
             _popup.Hide();
         }
 
@@ -686,13 +686,13 @@ namespace LensPop
             // 在自己的窗口里拖选文字（设置、结果窗）不要弹划词，也别去抢剪贴板
             if (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id)) return;
             // 在 UI 线程上取词：后台线程发 Ctrl+C 会明显延迟，实测会一直等到超时
-            string text = SelectionGrabber.GrabOnUiThread(700);
+            string text = SelectionGrabber.GrabOnUiThread(900);
             Program.LogLine("取词结果长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
             if (string.IsNullOrEmpty(text)) return;
             text = text.Trim();
             if (text.Length < 2) return;
             if (text.Length > 6000) text = text.Substring(0, 6000);
-            ShowPopup(pt, text);
+            ShowPopup(Cursor.Position, text);
         }
 
         void ShowPopup(Point pt, string text)
@@ -718,6 +718,7 @@ namespace LensPop
 
         void OpenTranslate(string text)
         {
+            Program.LogLine("点击胶囊: 翻译");
             _cfg = AppConfig.Load();
             var t = _cfg.ResolveRole("translate");
             if (t == null)
@@ -732,6 +733,7 @@ namespace LensPop
 
         void OpenAsk(string text)
         {
+            Program.LogLine("点击胶囊: 询问");
             _cfg = AppConfig.Load();
             var t = _cfg.ResolveRole("ask");
             if (t == null) t = _cfg.ResolveRole("translate");
@@ -748,6 +750,7 @@ namespace LensPop
 
         void Search(string text)
         {
+            Program.LogLine("点击胶囊: 搜索");
             _cfg = AppConfig.Load();
             string url = SearchEngines.BuildUrl(_cfg.Settings, text);
             try
