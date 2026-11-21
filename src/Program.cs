@@ -26,6 +26,8 @@ namespace LensPop
             if (!string.IsNullOrEmpty(transPath)) { RunFile(transPath, true); return; }
             if (HasFlag(args, "--shot")) { RunShot(); return; }
             if (HasFlag(args, "--shotbar-demo")) { RunShotBarDemo(); return; }
+            for (int i = 0; i < args.Length - 1; i++)
+                if (args[i] == "--settings-tab") { int v; if (int.TryParse(args[i + 1], out v)) SettingsForm.StartupTab = v; }
             if (HasFlag(args, "--settings"))
             {
                 var sf0 = new SettingsForm(AppConfig.Load());

@@ -10,6 +10,7 @@ namespace LensPop
     public class SettingsForm : Form
     {
         TabControl _tabs;
+        public static int StartupTab = -1;
         readonly AppConfig _cfg;
         bool _loading = true;
 
@@ -148,6 +149,11 @@ namespace LensPop
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
+            if (StartupTab >= 0 && _tabs != null && StartupTab < _tabs.TabPages.Count)
+            {
+                _tabs.SelectedIndex = StartupTab;
+                Invalidate();
+            }
             Theme.ForceForeground(this);
         }
         protected override void OnPaintBackground(PaintEventArgs e)
@@ -460,7 +466,7 @@ namespace LensPop
             _shellBtn.Click += delegate { ToggleShell(); };
             _shellStatus = Hint(p, "", 232, 58, 480, 20);
 
-            L(p, "截图（复制/提取/翻译）", 14, 96, 150);
+            L(p, "截图（复制/提取）", 14, 96, 150);
             _hkShot = T(p, 200, 92, 130, false);
             Hint(p, "例如 Ctrl+Alt+A", 340, 96, 300, 20);
 
@@ -472,39 +478,36 @@ namespace LensPop
             _hkTranslate = T(p, 200, 156, 130, false);
             Hint(p, "选中文字后按它直接翻译（不需要鼠标钩子）", 340, 160, 320, 20);
 
-            var diag = B(p, "运行自检", 200, 194, 100, 26);
+            var diag = B(p, "运行自检", 14, 196, 100, 26);
             diag.Click += delegate { RunDiagnostics(); };
-            var grab = B(p, "取词自测", 308, 194, 100, 26);
+            var grab = B(p, "取词自测", 122, 196, 100, 26);
             grab.Click += delegate { TestGrab(); };
-            Hint(p, "取词自测：3 秒内到别的窗口选中一段文字，程序会模拟 Ctrl+C 看能不能抓到", 416, 198, 360, 20);
-
-            var popBtn = B(p, "测试弹层", 416, 236, 100, 26);
+            var popBtn = B(p, "测试弹层", 230, 196, 100, 26);
             popBtn.Click += delegate { TestPopup(); };
+            Hint(p, "取词自测：在弹出的窗口里选中示例文字，验证取词链路。", 14, 228, 700, 20);
 
-            var exportBtn = B(p, "导出配置", 14, 236, 100, 26);
+            var exportBtn = B(p, "导出配置", 14, 262, 100, 26);
             exportBtn.Click += delegate { ExportConfig(); };
-            var importBtn = B(p, "导入配置", 122, 236, 100, 26);
+            var importBtn = B(p, "导入配置", 122, 262, 100, 26);
             importBtn.Click += delegate { ImportConfig(); };
-            Hint(p, "换版本、换机器时用这两个按钮搬配置（模型池、Key、提示词都在里面）", 232, 240, 480, 20);
-
-            var openDir = B(p, "打开配置目录", 14, 274, 120, 26);
+            var openDir = B(p, "打开配置目录", 230, 262, 110, 26);
             openDir.Click += delegate
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", AppConfig.Dir); } catch { }
             };
-            var openLog = B(p, "关于 LensPop", 146, 274, 120, 26);
-            openLog.Click += delegate
+            var aboutBtn = B(p, "关于 LensPop", 348, 262, 110, 26);
+            aboutBtn.Click += delegate
             {
                 MessageBox.Show(this,
                     "LensPop · 划词透镜 " + Program.Version + "\r\n\r\n" +
-                    "划词翻译 / 询问 / 搜索，右键图片识别文字，图片翻译贴回原图。\r\n" +
+                    "划词翻译 / 询问 / 搜索，图片识别文字与图片翻译。\r\n" +
                     "MIT License · 单文件，无后台服务，不收集任何数据。\r\n\r\n" +
                     "配置目录：" + AppConfig.Dir + "\r\n" +
                     "（API Key 以明文存在 config.json 里，换机器时注意别误传）",
                     "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
             };
-
-            Hint(p, "配置会同时写一份 config.bak.json 作为自动备份；读不出来时自动回退。", 14, 316, 700, 24);
+            Hint(p, "换机器时用导出 / 导入搬配置（模型池、Key、提示词都在 config.json 里）。", 14, 294, 700, 20);
+            Hint(p, "配置同时写一份 config.bak.json 作为自动备份；读不出来时自动回退。", 14, 320, 700, 20);
         }
 
         /* ---------------- 提供商 ---------------- */
