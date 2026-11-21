@@ -187,7 +187,7 @@ namespace LensPop
     }
 
     /// <summary>托盘常驻：划词弹窗、热键、剪贴板图片</summary>
-    class TrayApp : ApplicationContext
+    public class TrayApp : ApplicationContext
     {
         readonly NotifyIcon _tray = new NotifyIcon();
         MouseHook _hook;
@@ -195,9 +195,22 @@ namespace LensPop
         readonly HotkeyHost _hotkeys = new HotkeyHost();
         readonly Form _invoker = new Form();
         PopupForm _popup;
+        MainForm _main;
         AppConfig _cfg;
         ContextMenuStrip _menu;
         EventWaitHandle _openEvent;
+        TaskbarWatcher _watcher;
+
+        void ReAddTray()
+        {
+            try
+            {
+                _tray.Visible = false;
+                _tray.Visible = true;
+                Program.LogLine("重新添加托盘图标 可见=" + _tray.Visible);
+            }
+            catch { }
+        }
 
         public TrayApp()
         {
@@ -279,7 +292,7 @@ namespace LensPop
                         try
                         {
                             _openEvent.WaitOne();
-                            _invoker.BeginInvoke(new Action(OpenSettings));
+                            _invoker.BeginInvoke(new Action(ShowMain));
                         }
                         catch { return; }
                     }
@@ -290,6 +303,28 @@ namespace LensPop
             catch { }
 
             // 第一次运行（还没有配置文件）直接把设置窗摆出来，别让人以为没反应
+            try
+            {
+                _watcher = new TaskbarWatcher();
+                _watcher.TaskbarCreated += delegate { ReAddTray(); };
+            }
+            catch { }
+
+            var trayFix = new System.Windows.Forms.Timer();
+            trayFix.Interval = 1500;
+            trayFix.Tick += delegate
+            {
+                trayFix.Stop();
+                try
+                {
+                    _tray.Visible = false;
+                    _tray.Visible = true;
+                    Program.LogLine("托盘图标重试完成 可见=" + _tray.Visible);
+                }
+                catch { }
+            };
+            trayFix.Start();
+
             Program.LogLine("托盘就绪 pid=" + System.Diagnostics.Process.GetCurrentProcess().Id +
                 " 图标可见=" + _tray.Visible + " 管理员=" + Program.IsAdmin());
 
@@ -325,6 +360,35 @@ namespace LensPop
             catch { }
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        static extern uint RegisterWindowMessage(string lpString);
+
+        /// <summary>Explorer 重启会清空托盘图标，收到 TaskbarCreated 就重新加一遍</summary>
+        class TaskbarWatcher : NativeWindow
+        {
+            readonly uint _msg;
+            public event Action TaskbarCreated;
+
+            public TaskbarWatcher()
+            {
+                var cp = new CreateParams();
+                cp.Caption = "LensPopTaskbar";
+                cp.Parent = (IntPtr)(-3);   // HWND_MESSAGE
+                CreateHandle(cp);
+                _msg = RegisterWindowMessage("TaskbarCreated");
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                if (_msg != 0 && (uint)m.Msg == _msg)
+                {
+                    var h = TaskbarCreated;
+                    if (h != null) { try { h(); } catch { } }
+                }
+                base.WndProc(ref m);
+            }
+        }
+
         static Icon LoadIcon()
         {
             try
@@ -342,6 +406,7 @@ namespace LensPop
             var m = new ContextMenuStrip();
             m.Font = Theme.UI;
 
+            m.Items.Add("打开主窗口", null, delegate { ShowMain(); });
             m.Items.Add("设置…", null, delegate { OpenSettings(); });
 
             var pop = new ToolStripMenuItem("划词弹窗");
@@ -395,7 +460,7 @@ namespace LensPop
             _tray.ContextMenuStrip = m;
         }
 
-        void Quit()
+        public void Quit()
         {
             try { if (_hook != null) _hook.Uninstall(); } catch { }
             try { _hotkeys.Dispose(); } catch { }
@@ -415,7 +480,75 @@ namespace LensPop
             if (!string.IsNullOrEmpty(ht)) _hotkeys.Register(ht, delegate { TranslateSelection(); });
         }
 
-        void OpenSettings()
+        public AppConfig Config { get { return _cfg; } }
+        public bool TrayVisible { get { return _tray != null && _tray.Visible; } }
+
+        public string TranslateTarget { get { return RoleName("translate"); } }
+        public string OcrTarget { get { return RoleName("ocr"); } }
+        public string AskTarget { get { return RoleName("ask"); } }
+
+        string RoleName(string role)
+        {
+            var t = _cfg.ResolveRole(role);
+            return t == null ? "" : (t.ProviderName + " · " + t.Model);
+        }
+
+        public void OpenConfigDir()
+        {
+            try { Process.Start("explorer.exe", AppConfig.Dir); } catch { }
+        }
+
+        public void RegisterShellFromUi()
+        {
+            bool ok = ShellMenu.Register();
+            if (!ok) ok = ShellMenu.RegisterSendTo();
+            if (!ok)
+            {
+                try
+                {
+                    string p = ShellMenu.WriteRegFile();
+                    Clipboard.SetText(p);
+                    System.Windows.Forms.MessageBox.Show(
+                        "写注册表被拦了，已生成注册表文件：\r\n" + p + "\r\n\r\n双击导入即可（路径已复制）。",
+                        "LensPop");
+                }
+                catch { }
+            }
+            else
+            {
+                System.Windows.Forms.MessageBox.Show("图片菜单已注册。Win11 上请在图片右键里点「显示更多选项」。", "LensPop");
+            }
+            RefreshMain();
+        }
+
+        public void TestGrab()
+        {
+            using (var f = new GrabTestForm()) f.ShowDialog(_main != null && _main.Visible ? _main : null);
+        }
+
+        public void CaptureScreen(bool translate)
+        {
+            Capture(translate);
+        }
+
+        public void ShowMain()
+        {
+            try
+            {
+                if (_main == null || _main.IsDisposed) _main = new MainForm(this);
+                _main.Show();
+                _main.Activate();
+                _main.BringToFront();
+            }
+            catch { }
+        }
+
+        void RefreshMain()
+        {
+            try { if (_main != null && _main.Visible) _main.Refresh(); } catch { }
+        }
+
+        public void OpenSettings()
         {
             Program.LogLine("OpenSettings 进入");
             HidePopup();
@@ -498,7 +631,7 @@ namespace LensPop
                 _popup.Width + "x" + _popup.Height + " 可见=" + _popup.Visible);
         }
 
-        void HidePopup()
+        public void HidePopup()
         {
             if (_popup != null && _popup.Visible) _popup.Hide();
         }
@@ -579,7 +712,7 @@ namespace LensPop
             OpenTranslate(text.Trim());
         }
 
-        void OcrClipboard()
+        public void OcrClipboard()
         {
             var bmp = ClipboardImage();
             if (bmp == null)
@@ -603,7 +736,7 @@ namespace LensPop
             ImageWorkflow.Translate(_cfg, bmp, Cursor.Position, null);
         }
 
-        void Capture(bool translate)
+        public void Capture(bool translate)
         {
             HidePopup();
             _cfg = AppConfig.Load();
