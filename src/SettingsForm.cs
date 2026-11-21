@@ -42,6 +42,7 @@ namespace LensPop
         System.Windows.Forms.Timer _commitTimer;
         bool _syncing;
         bool _committing;
+        string _currentProvId;
 
         CheckBox _autostart;
         Button _shellBtn;
@@ -480,6 +481,12 @@ namespace LensPop
             return _cfg.Providers[i];
         }
 
+        /// <summary>当前输入框里显示的是哪个提供商（切换选择时靠它决定把内容写回谁）</summary>
+        ProviderDef CurrentProvider()
+        {
+            return _cfg.FindProvider(_currentProvId);
+        }
+
         void LoadProviders()
         {
             _provList.Items.Clear();
@@ -492,6 +499,7 @@ namespace LensPop
         void ShowProviderFields(ProviderDef p)
         {
             _loading = true;
+            _currentProvId = p == null ? null : p.Id;
             if (p == null)
             {
                 _presetBox.SelectedIndex = Providers.All.Count - 1;
@@ -579,6 +587,7 @@ namespace LensPop
             if (_baseBox.Text.Trim().Length == 0 && prov.BaseUrl.Length > 0) _baseBox.Text = prov.BaseUrl;
             if (_nameBox.Text.Trim().Length == 0) _nameBox.Text = prov.Name;
             _syncing = false;
+            _currentProvId = prov.Id;
 
             if (_provEmpty != null) _provEmpty.Visible = false;
             _cfg.Save();
@@ -588,6 +597,7 @@ namespace LensPop
         void OnProviderSelected()
         {
             if (_loading || _syncing) return;
+            // 先把输入框内容写回「刚才显示的那一个」，再载入新选中的那一个
             CommitProviderFields();
             ShowProviderFields(SelectedProvider());
         }
@@ -615,13 +625,17 @@ namespace LensPop
             _committing = true;
             try
             {
-                var p = SelectedProvider();
+                var p = CurrentProvider();
                 if (p == null) return;
                 int i = _presetBox.SelectedIndex;
                 if (i >= 0 && i < Providers.All.Count) p.PresetId = Providers.All[i].Id;
-                p.Name = _nameBox.Text.Trim();
-                if (p.Name.Length == 0) p.Name = "未命名提供商";
-                p.BaseUrl = _baseBox.Text.Trim();
+
+                string name = _nameBox.Text.Trim();
+                if (name.Length > 0) p.Name = name;
+                else if (string.IsNullOrEmpty(p.Name)) p.Name = "未命名提供商";
+
+                string url = _baseBox.Text.Trim();
+                if (url.Length > 0) p.BaseUrl = url;
                 p.ApiKey = _keyBox.Text.Trim();
 
                 int sel = _provList.SelectedIndex;

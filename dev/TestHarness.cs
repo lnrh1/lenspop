@@ -30,6 +30,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--grab-raw") return GrabRaw.Run();
             foreach (string a in args) if (a == "--shell") return ShellTest.Run();
             foreach (string a in args) if (a == "--sendto") return SendToTest.Run();
+            foreach (string a in args) if (a == "--ui-provider") return ProviderSwitchTest.Run();
             try
             {
                 TestUi();
@@ -442,6 +443,57 @@ namespace LensPopTests
             Console.WriteLine("结果: " + outLbl.Text);
             f.Close();
             return outLbl.Text.StartsWith("取词成功") ? 0 : 1;
+        }
+    }
+
+    /// <summary>回归：切换提供商不能把名字/BaseURL 写丢（--ui-provider）</summary>
+    static class ProviderSwitchTest
+    {
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            var seed = new LensPop.AppConfig();
+            var a = new LensPop.ProviderDef();
+            a.Id = "p_a"; a.PresetId = "deepseek"; a.Name = "提供商A"; a.BaseUrl = "https://a.example/v1"; a.ApiKey = "sk-a";
+            var b = new LensPop.ProviderDef();
+            b.Id = "p_b"; b.PresetId = "kimi"; b.Name = "提供商B"; b.BaseUrl = "https://b.example/v1"; b.ApiKey = "sk-b";
+            seed.Providers.Add(a);
+            seed.Providers.Add(b);
+            seed.Save();
+
+            var cfg = LensPop.AppConfig.Load();
+            var form = new LensPop.SettingsForm(cfg);
+            form.StartPosition = FormStartPosition.Manual;
+            form.Location = new System.Drawing.Point(100, 80);
+            form.Show();
+            Application.DoEvents();
+
+            var f = typeof(LensPop.SettingsForm).GetField("_provList", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var list = (System.Windows.Forms.ListBox)f.GetValue(form);
+            Console.WriteLine("provider 数=" + list.Items.Count + " 当前选中=" + list.SelectedIndex);
+
+            list.SelectedIndex = 1;
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(700);
+            Application.DoEvents();
+
+            list.SelectedIndex = 0;
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(900);
+            Application.DoEvents();
+
+            var after = LensPop.AppConfig.Load();
+            foreach (var p in after.Providers)
+                Console.WriteLine("  " + p.Id + " name=" + p.Name + " url=" + p.BaseUrl + " key=" + p.ApiKey);
+
+            bool ok = after.Providers.Count == 2
+                && after.Providers[0].Name == "提供商A" && after.Providers[0].BaseUrl == "https://a.example/v1" && after.Providers[0].ApiKey == "sk-a"
+                && after.Providers[1].Name == "提供商B" && after.Providers[1].BaseUrl == "https://b.example/v1" && after.Providers[1].ApiKey == "sk-b";
+            Console.WriteLine(ok ? "PASS" : "FAIL");
+            form.Close();
+            return ok ? 0 : 1;
         }
     }
 
