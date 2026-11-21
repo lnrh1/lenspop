@@ -442,6 +442,9 @@ namespace LensPop
             grab.Click += delegate { TestGrab(); };
             Hint(p, "取词自测：3 秒内到别的窗口选中一段文字，程序会模拟 Ctrl+C 看能不能抓到", 416, 198, 360, 20);
 
+            var popBtn = B(p, "测试弹层", 416, 236, 100, 26);
+            popBtn.Click += delegate { TestPopup(); };
+
             var exportBtn = B(p, "导出配置", 14, 236, 100, 26);
             exportBtn.Click += delegate { ExportConfig(); };
             var importBtn = B(p, "导入配置", 122, 236, 100, 26);
@@ -954,29 +957,55 @@ namespace LensPop
 
         void UpdateShellStatus()
         {
-            bool on = ShellMenu.IsRegistered();
-            _shellStatus.Text = on ? "已注册（在图片上右键就能看到 LensPop）" : "未注册";
-            _shellBtn.Text = on ? "注销" : "注册";
+            bool reg = ShellMenu.IsRegistered();
+            bool send = ShellMenu.SendToRegistered();
+            _shellStatus.Text = "注册表菜单：" + (reg ? "已注册" : "未注册") +
+                                "　发送到：" + (send ? "已添加" : "无");
+            _shellBtn.Text = (reg || send) ? "注销" : "注册";
         }
 
         void ToggleShell()
         {
-            if (ShellMenu.IsRegistered())
+            if (ShellMenu.IsRegistered() || ShellMenu.SendToRegistered())
             {
                 ShellMenu.Unregister();
+                ShellMenu.UnregisterSendTo();
                 _cfg.Settings.ShellMenu = false;
+                _cfg.Save();
+                UpdateShellStatus();
+                SetStatusText("已注销图片菜单");
+                return;
+            }
+
+            bool okReg = ShellMenu.Register();
+            if (okReg)
+            {
+                _cfg.Settings.ShellMenu = true;
+                _cfg.Save();
+                UpdateShellStatus();
+                SetStatusText("已注册。Win11 上要在图片右键里点「显示更多选项」才能看到");
+                return;
+            }
+
+            // 注册表被拦（很常见，安全软件会拒写 Classes），改用「发送到」菜单
+            string why = ShellMenu.RegisterError == null ? "未知原因" : ShellMenu.RegisterError;
+            bool okSend = ShellMenu.RegisterSendTo();
+            _cfg.Settings.ShellMenu = okSend;
+            _cfg.Save();
+            UpdateShellStatus();
+            if (okSend)
+            {
+                MessageBox.Show(this,
+                    "注册表写入被拦住了（多半是安全软件）：\r\n" + why + "\r\n\r\n" +
+                    "已自动改用「发送到」菜单：右键图片 → 发送到 → LensPop 识别文字 / 翻译图片。\r\n" +
+                    "这条不需要写注册表，一般不会被拦。",
+                    "已切换为发送到菜单", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else
             {
-                if (!ShellMenu.Register())
-                {
-                    MessageBox.Show(this, "注册右键菜单失败（可能被安全软件拦了）。", "提示");
-                    return;
-                }
-                _cfg.Settings.ShellMenu = true;
+                string why2 = ShellMenu.RegisterError == null ? "未知原因" : ShellMenu.RegisterError;
+                MessageBox.Show(this, "两种方式都失败了：\r\n" + why + "\r\n" + why2, "注册失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
-            _cfg.Save();
-            UpdateShellStatus();
         }
 
         /* ---------------- 导入导出 ---------------- */
@@ -1064,6 +1093,17 @@ namespace LensPop
             t.Start();
         }
 
+        void TestPopup()
+        {
+            var pop = new PopupForm();
+            pop.ShowAt(Cursor.Position, "测试");
+            var t = new System.Windows.Forms.Timer();
+            t.Interval = 5000;
+            t.Tick += delegate { t.Stop(); t.Dispose(); pop.Close(); };
+            t.Start();
+            SetStatusText("应该在鼠标旁出现一个小胶囊；没出现就是弹层被别的窗口盖住或被安全软件拦了");
+        }
+
         void RunDiagnostics()
         {
             var sb = new System.Text.StringBuilder();
@@ -1079,7 +1119,10 @@ namespace LensPop
             try { if (Clipboard.ContainsText()) clip = Clipboard.GetText(); } catch { }
             sb.AppendLine("剪贴板文字  : " + (clip == null ? 0 : clip.Trim().Length) + " 字符");
             sb.AppendLine("前台是本程序: " + (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id) ? "是" : "否"));
-            sb.AppendLine("图片右键菜单: " + (ShellMenu.IsRegistered() ? "已注册" : "未注册（设置 → 系统 → 注册）"));
+            sb.AppendLine("注册表菜单  : " + (ShellMenu.IsRegistered() ? "已注册" : "未注册"));
+            sb.AppendLine("发送到菜单  : " + (ShellMenu.SendToRegistered() ? "已添加" : "无"));
+            sb.AppendLine("进程路径    : " + System.Windows.Forms.Application.ExecutablePath);
+            sb.AppendLine("启动时间    : " + System.Diagnostics.Process.GetCurrentProcess().StartTime.ToString("yyyy-MM-dd HH:mm:ss"));
             uint mods;
             uint vk;
             sb.AppendLine("识别热键    : " + (_hkOcr.Text.Trim().Length == 0 ? "未设置" : (_hkOcr.Text + " " + (HotkeyHost.Parse(_hkOcr.Text, out mods, out vk) ? "格式有效" : "格式无效"))));

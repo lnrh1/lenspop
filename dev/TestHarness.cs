@@ -28,6 +28,8 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--config") return ConfigTest.Run();
             foreach (string a in args) if (a == "--grab") return GrabTest.Run();
             foreach (string a in args) if (a == "--grab-raw") return GrabRaw.Run();
+            foreach (string a in args) if (a == "--shell") return ShellTest.Run();
+            foreach (string a in args) if (a == "--sendto") return SendToTest.Run();
             try
             {
                 TestUi();
@@ -440,6 +442,32 @@ namespace LensPopTests
             Console.WriteLine("结果: " + outLbl.Text);
             f.Close();
             return outLbl.Text.StartsWith("取词成功") ? 0 : 1;
+        }
+    }
+
+    /// <summary>发送到菜单注册实测（--sendto）</summary>
+    static class SendToTest
+    {
+        public static int Run()
+        {
+            bool ok = LensPop.ShellMenu.RegisterSendTo();
+            Console.WriteLine("注册结果=" + ok + " 错误=" + (LensPop.ShellMenu.RegisterError == null ? "无" : LensPop.ShellMenu.RegisterError));
+            Console.WriteLine("已存在=" + LensPop.ShellMenu.SendToRegistered());
+            Console.WriteLine("目录=" + LensPop.ShellMenu.SendToDir);
+            return ok ? 0 : 1;
+        }
+    }
+
+    /// <summary>右键菜单注册实测（--shell）</summary>
+    static class ShellTest
+    {
+        public static int Run()
+        {
+            Console.WriteLine("注册前: " + LensPop.ShellMenu.IsRegistered());
+            bool ok = LensPop.ShellMenu.Register();
+            Console.WriteLine("注册结果=" + ok + " 错误=" + (LensPop.ShellMenu.RegisterError == null ? "无" : LensPop.ShellMenu.RegisterError));
+            Console.WriteLine("注册后: " + LensPop.ShellMenu.IsRegistered());
+            return ok ? 0 : 1;
         }
     }
 

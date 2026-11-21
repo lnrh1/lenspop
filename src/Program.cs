@@ -398,26 +398,36 @@ namespace LensPop
             _popup.Hide();
         }
 
+        bool _grabbing;
+
         void OnDragEnded(Point pt)
         {
             Program.LogLine("拖拽结束 @" + pt.X + "," + pt.Y + " 划词开关=" + _cfg.Settings.SelectionPopup);
             if (!_cfg.Settings.SelectionPopup) return;
+            if (_grabbing) return;
+            _grabbing = true;
+            try
+            {
+                DoDragEnded(pt);
+            }
+            finally
+            {
+                _grabbing = false;
+            }
+        }
+
+        void DoDragEnded(Point pt)
+        {
             // 在自己的窗口里拖选文字（设置、结果窗）不要弹划词，也别去抢剪贴板
             if (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id)) return;
-            ThreadPool.QueueUserWorkItem(delegate
-            {
-                string text = SelectionGrabber.Grab(500);
-                Program.LogLine("取词结果长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
-                if (string.IsNullOrEmpty(text)) return;
-                text = text.Trim();
-                if (text.Length < 2) return;
-                if (text.Length > 6000) text = text.Substring(0, 6000);
-                try
-                {
-                    _invoker.BeginInvoke(new Action(delegate { ShowPopup(pt, text); }));
-                }
-                catch { }
-            });
+            // 在 UI 线程上取词：后台线程发 Ctrl+C 会明显延迟，实测会一直等到超时
+            string text = SelectionGrabber.GrabOnUiThread(700);
+            Program.LogLine("取词结果长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
+            if (string.IsNullOrEmpty(text)) return;
+            text = text.Trim();
+            if (text.Length < 2) return;
+            if (text.Length > 6000) text = text.Substring(0, 6000);
+            ShowPopup(pt, text);
         }
 
         void ShowPopup(Point pt, string text)
