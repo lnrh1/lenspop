@@ -35,6 +35,7 @@ namespace LensPop
     public class Settings
     {
         public string TargetLang = "中文（简体）";
+        public bool AutoLang = true;
         public string SearchEngine = "bing";
         public string SearchUrlTpl = "https://www.bing.com/search?q=%s";
         public bool SelectionPopup = true;
@@ -44,6 +45,8 @@ namespace LensPop
         public int TimeoutSec = 120;
         public string AskLevel = "off";
         public string HotkeyShot = "Ctrl+Alt+A";
+        public string HotkeyCapture = "Ctrl+Alt+S";
+        public string HotkeyCaptureTr = "Ctrl+Alt+F";
         public bool Autostart = false;
         public bool RunAsAdmin = true;
         public bool ShellMenu = false;

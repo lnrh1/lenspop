@@ -572,6 +572,10 @@ namespace LensPop
         {
             _hotkeys.UnregisterAll();
 
+            string hc = _cfg.Settings.HotkeyCapture;
+            if (!string.IsNullOrEmpty(hc)) _hotkeys.Register(hc, delegate { Capture(false); });
+            string hct = _cfg.Settings.HotkeyCaptureTr;
+            if (!string.IsNullOrEmpty(hct)) _hotkeys.Register(hct, delegate { Capture(true); });
             string hs = _cfg.Settings.HotkeyShot;
             if (!string.IsNullOrEmpty(hs)) _hotkeys.Register(hs, delegate { ShotCapture(); });
         }
@@ -1038,7 +1042,7 @@ namespace LensPop
             var result = new List<string>(texts);
             var ser = new JavaScriptSerializer();
             var msgs = new List<ChatMsg>();
-            msgs.Add(new ChatMsg("system", ResultForm.PromptFor(cfg, "translateLines")));
+            msgs.Add(new ChatMsg("system", ResultForm.PromptFor(cfg, "translateLines", string.Join("\n", texts.ToArray()))));
             msgs.Add(new ChatMsg("user", ser.Serialize(texts)));
 
             string raw = await Api.ChatAsync(tr, msgs, Thinking.Disable(tr.PresetId, tr.Model), false, null,

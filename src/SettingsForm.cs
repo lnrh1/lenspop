@@ -35,7 +35,7 @@ namespace LensPop
         ComboBox _langBox, _engineBox;
         TextBox _searchTpl;
         NumericUpDown _temp, _maxTokens, _timeout;
-        CheckBox _selPopup, _stream;
+        CheckBox _selPopup, _stream, _autoLang;
 
         ComboBox _promptPick;
         TextBox _promptBox;
@@ -49,7 +49,7 @@ namespace LensPop
         string _currentProvId;
 
         CheckBox _autostart;
-        TextBox _hkShot;
+        TextBox _hkShot, _hkCapture, _hkCaptureTr;
         Label _status;
 
         public SettingsForm(AppConfig cfg)
@@ -409,7 +409,13 @@ namespace LensPop
             _stream.Font = Theme.UI;
             p.Controls.Add(_stream);
 
-            Hint(p, "划词原理：松开鼠标后程序会模拟一次 Ctrl+C 读取选中文字，因此会临时改写剪贴板。\r\n翻译与 OCR 一律不思考（直接出结果）；询问时可在小窗里选思考档位，默认关闭。\r\n搜索会用系统默认浏览器打开。", 14, 320, 740, 90);
+            _autoLang = new CheckBox();
+            _autoLang.Text = "自动识别语种：中文→英文，其它语言→中文";
+            _autoLang.Location = new Point(14, 302);
+            _autoLang.Width = 520;
+            _autoLang.Font = Theme.UI;
+            p.Controls.Add(_autoLang);
+            Hint(p, "划词原理：松开鼠标后程序会模拟一次 Ctrl+C 读取选中文字，因此会临时改写剪贴板。\r\n翻译与 OCR 一律不思考（直接出结果）；询问时可在小窗里选思考档位，默认关闭。\r\n搜索会用系统默认浏览器打开。", 14, 336, 740, 90);
         }
 
         void BuildPromptTab(TabControl tabs)
@@ -477,6 +483,14 @@ namespace LensPop
             _hkShot = T(p, 200, 126, 130, false);
             Hint(p, "例如 Ctrl+Alt+A", 340, 130, 300, 20);
 
+            L(p, "截图识别", 14, 162, 110);
+            _hkCapture = T(p, 200, 158, 130, false);
+            Hint(p, "框选后直接识别文字", 340, 162, 300, 20);
+
+            L(p, "截图翻译", 14, 194, 110);
+            _hkCaptureTr = T(p, 200, 190, 130, false);
+            Hint(p, "框选后直接翻译图片", 340, 194, 300, 20);
+
 
 
             var diag = B(p, "运行自检", 14, 230, 100, 26);
@@ -496,7 +510,7 @@ namespace LensPop
             {
                 try { System.Diagnostics.Process.Start("explorer.exe", AppConfig.Dir); } catch { }
             };
-            var aboutBtn = B(p, "关于 LensPop", 348, 296, 110, 26);
+            var aboutBtn = B(p, "关于", 348, 296, 90, 26);
             aboutBtn.Click += delegate
             {
                 MessageBox.Show(this,
@@ -988,10 +1002,13 @@ namespace LensPop
             _maxTokens.Value = Math.Max(0, Math.Min(64000, s.MaxTokens));
             _timeout.Value = Math.Max(10, Math.Min(600, s.TimeoutSec));
             _selPopup.Checked = s.SelectionPopup;
+            _autoLang.Checked = s.AutoLang;
             _stream.Checked = s.Stream;
             UpdateShellStatus();
             _runAsAdmin.Checked = s.RunAsAdmin;
             _hkShot.Text = s.HotkeyShot;
+            _hkCapture.Text = s.HotkeyCapture;
+            _hkCaptureTr.Text = s.HotkeyCaptureTr;
             _autostart.Checked = IsAutostart();
             UpdateSearchTplEnabled();
             _loading = false;
@@ -1272,6 +1289,7 @@ namespace LensPop
             s.MaxTokens = (int)_maxTokens.Value;
             s.TimeoutSec = (int)_timeout.Value;
             s.SelectionPopup = _selPopup.Checked;
+            s.AutoLang = _autoLang.Checked;
             s.Stream = _stream.Checked;
             s.ShellMenu = ShellMenu.IsRegistered();
 
@@ -1295,6 +1313,8 @@ namespace LensPop
                 return false;
             }
             s.HotkeyShot = hshot;
+            s.HotkeyCapture = _hkCapture.Text.Trim();
+            s.HotkeyCaptureTr = _hkCaptureTr.Text.Trim();
             s.RunAsAdmin = _runAsAdmin.Checked;
 
             // 提示词

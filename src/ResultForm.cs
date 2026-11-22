@@ -307,6 +307,11 @@ namespace LensPop
 
         public static string PromptFor(AppConfig cfg, string key)
         {
+            return PromptFor(cfg, key, null);
+        }
+
+        public static string PromptFor(AppConfig cfg, string key, string sourceText)
+        {
             string custom = "";
             var p = cfg.Settings.Prompts;
             if (key == "translate") custom = p.Translate;
@@ -318,6 +323,8 @@ namespace LensPop
             custom = custom.Trim();
 
             string lang = cfg.Settings.TargetLang;
+            if (cfg.Settings.AutoLang && sourceText != null && (key == "translate" || key == "translateLines"))
+                lang = LangDetect.TargetFor(sourceText, lang);
             string def;
             if (key == "translate")
                 def = "你是专业的翻译引擎。把用户给出的文本翻译成" + lang + "。要求：只输出译文，不要解释、不要引号、不要重复原文；保留原文的换行、列表与代码格式；人名与专有名词用通行译法；如果原文本来就是" + lang + "，就用地道的" + lang + "把要点复述一遍。";
@@ -341,8 +348,10 @@ namespace LensPop
 
             if (_mode == ResultMode.Translate)
             {
-                _title.Text = "翻译 → " + _cfg.Settings.TargetLang;
-                _messages.Add(new ChatMsg("system", PromptFor(_cfg, "translate")));
+                string src = _source == null ? "" : _source;
+                string lang = _cfg.Settings.AutoLang ? LangDetect.TargetFor(src, _cfg.Settings.TargetLang) : _cfg.Settings.TargetLang;
+                _title.Text = "翻译 → " + lang;
+                _messages.Add(new ChatMsg("system", PromptFor(_cfg, "translate", src)));
                 _messages.Add(new ChatMsg("user", _source));
                 RunChat();
             }
