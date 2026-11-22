@@ -39,6 +39,7 @@ if not exist dist mkdir dist
   src\ShotBar.cs ^
   src\LangDetect.cs ^
   src\HtmlDoc.cs ^
+  src\AskDialog.cs ^
   src\UiaGrab.cs ^
   src\MainForm.cs ^
   src\MouseHook.cs ^

@@ -37,6 +37,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--screenshot") return ScreenShot.Run();
             foreach (string a in args) if (a == "--shotbar") return ShotBarClick.Run();
             foreach (string a in args) if (a == "--pill-html") return HtmlPill.Run();
+            foreach (string a in args) if (a == "--ask") return AskShot.Run();
             try
             {
                 TestImageEncode();
@@ -847,6 +848,27 @@ namespace LensPopTests
             shot.Dispose();
             f.Close();
             Console.WriteLine("saved pill-html.png");
+            return 0;
+        }
+    }
+
+    static class AskShot
+    {
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var d = new LensPop.AskDialog("Anthropic 五小时会话额度是按消息条数算的吗？还是按 token？");
+            d.Show();
+            for (int i = 0; i < 40; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(30); }
+            var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            var shot = new System.Drawing.Bitmap(b.Width, b.Height);
+            using (var g = System.Drawing.Graphics.FromImage(shot)) g.CopyFromScreen(b.X, b.Y, 0, 0, b.Size);
+            string dir = System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots");
+            System.IO.Directory.CreateDirectory(dir);
+            shot.Save(System.IO.Path.Combine(dir, "ask.png"), System.Drawing.Imaging.ImageFormat.Png);
+            shot.Dispose();
+            d.Close();
+            Console.WriteLine("saved ask.png");
             return 0;
         }
     }

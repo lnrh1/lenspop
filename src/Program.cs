@@ -854,6 +854,12 @@ namespace LensPop
                 Program.Info("还没选「询问」模型。\r\n托盘图标右键 → 设置 → 模型池。");
                 return;
             }
+            using (var dlg = new AskDialog(text))
+            {
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                text = dlg.Result;
+            }
+
             var f = new ResultForm(_cfg, t, ResultMode.Ask, text);
             f.Shown += delegate { Theme.ForceForeground(f); };
             f.PlaceNear(Cursor.Position);
