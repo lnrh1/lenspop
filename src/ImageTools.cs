@@ -283,6 +283,12 @@ namespace LensPop
                 }
 
                 var family = PickFont();
+
+                // 先算出每条线要擦除的矩形、要写的内容与颜色
+                var rects = new List<Rectangle>();
+                var texts = new List<string>();
+                var fgColors = new List<Color>();
+                var bgColors = new List<Color>();
                 foreach (var l in lines)
                 {
                     string text = string.IsNullOrEmpty(l.Translation) ? l.Text : l.Translation;
@@ -301,7 +307,6 @@ namespace LensPop
 
                     var rect = new Rectangle(x, y, w, h);
 
-                    // 模型给的框常常比原文窄，先按原文字号量一下真实宽度，多出来的原文也要擦干净
                     if (!string.IsNullOrEmpty(l.Text))
                     {
                         int measureFs = Math.Max(8, (int)Math.Round(rect.Height * 0.98));
@@ -317,11 +322,29 @@ namespace LensPop
                         }
                     }
 
-                    Color bg = SampleRing(src, rect);
-                    Color fg = ParseColor(l.Color, bg);
+                    Color bgc = SampleRing(src, rect);
+                    rects.Add(rect);
+                    texts.Add(text);
+                    bgColors.Add(bgc);
+                    fgColors.Add(ParseColor(l.Color, bgc));
+                }
 
-                    using (var brush = new SolidBrush(bg)) g.FillRectangle(brush, rect);
-                    DrawFitted(g, text, rect, fg, family);
+                // 再逐条擦除并写译文：写的时候可以借用下方空白，避免为了塞进窄框把字压到最小
+                for (int i = 0; i < rects.Count; i++)
+                {
+                    var rect = rects[i];
+                    int bottom = bmp.Height - 1;
+                    for (int j = 0; j < rects.Count; j++)
+                    {
+                        if (j == i) continue;
+                        if (rects[j].Top > rect.Bottom && rects[j].Top - 3 < bottom) bottom = rects[j].Top - 3;
+                    }
+                    int drawH = Math.Max(rect.Height, Math.Min(bottom - rect.Top, (int)(rect.Height * 2.6)));
+                    if (drawH < rect.Height) drawH = rect.Height;
+
+                    var erase = Rectangle.Inflate(rect, 3, 6);
+                    using (var brush = new SolidBrush(bgColors[i])) g.FillRectangle(brush, erase);
+                    DrawFitted(g, texts[i], new Rectangle(rect.X, rect.Y, rect.Width, drawH), fgColors[i], family);
                 }
             }
             return bmp;

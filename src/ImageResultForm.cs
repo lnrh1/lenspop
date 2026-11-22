@@ -219,12 +219,10 @@ namespace LensPop
             // 直接保存，不走系统文件对话框：对话框在提权/OneDrive 环境里经常误报无权限
             string dir = System.IO.Path.Combine(DefaultSaveDir(), "LensPop");
             string name = "lenspop-translated-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".png";
-            string[] targets = new string[]
-            {
-                System.IO.Path.Combine(dir, name),
-                System.IO.Path.Combine(DefaultSaveDir(), name),
-                System.IO.Path.Combine(System.IO.Path.Combine(AppConfig.Dir, "exports"), name)
-            };
+            string pictures = System.IO.Path.Combine(dir, name);
+            string desktop = System.IO.Path.Combine(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "LensPop"), name);
+            string temp = System.IO.Path.Combine(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "LensPop"), name);
+            string[] targets = new string[] { pictures, desktop, temp };
 
             foreach (string path in targets)
             {
