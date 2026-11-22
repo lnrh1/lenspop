@@ -83,10 +83,11 @@ namespace LensPop
             {
                 if (_dir != null) return _dir;
 
+                // LocalAppData 优先：Roaming 可能因历史权限/OneDrive 读写被拒
                 string[] bases = new string[]
                 {
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     System.IO.Path.GetTempPath()
                 };
 

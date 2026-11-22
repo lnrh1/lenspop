@@ -132,14 +132,18 @@ namespace LensPop
 
         public static void LogLine(string s)
         {
+            string line = DateTime.Now.ToString("HH:mm:ss.fff") + "  " + s + "\r\n";
             try
             {
                 string p = System.IO.Path.Combine(AppConfig.Dir, "debug.log");
                 var fi = new System.IO.FileInfo(p);
                 if (fi.Exists && fi.Length > 128 * 1024) System.IO.File.Delete(p);
-                System.IO.File.AppendAllText(p, DateTime.Now.ToString("HH:mm:ss.fff") + "  " + s + "\r\n");
+                System.IO.File.AppendAllText(p, line);
+                return;
             }
             catch { }
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "LensPop-debug.log"), line); return; } catch { }
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(Application.StartupPath, "debug-fallback.log"), line); } catch { }
         }
 
         static void Fatal(Exception e)
@@ -553,6 +557,21 @@ namespace LensPop
             m.Items.Add("打开配置目录", null, delegate
             {
                 try { Process.Start("explorer.exe", AppConfig.Dir); } catch { }
+            });
+            m.Items.Add(new ToolStripSeparator());
+            m.Items.Add("修复托盘图标（需重启资源管理器）", null, delegate
+            {
+                if (MessageBox.Show("会重启资源管理器（任务栏会闪一下，所有托盘图标重新加载）。继续吗？",
+                    "修复托盘图标", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                try { WriteTrayRegFile(); } catch { }
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c taskkill /f /im explorer.exe & timeout /t 1 >nul & start explorer.exe");
+                    psi.UseShellExecute = true;
+                    psi.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+                    System.Diagnostics.Process.Start(psi);
+                }
+                catch { }
             });
             m.Items.Add("退出", null, delegate { Quit(); });
 
