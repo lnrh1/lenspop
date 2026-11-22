@@ -39,6 +39,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--pill-html") return HtmlPill.Run();
             foreach (string a in args) if (a == "--ask") return AskShot.Run();
             foreach (string a in args) if (a == "--ask-enter") return AskEnter.Run();
+            foreach (string a in args) if (a == "--md") return MdShot.Run();
             try
             {
                 TestImageEncode();
@@ -894,6 +895,39 @@ namespace LensPopTests
             var r = dlg.ShowDialog();
             Console.WriteLine("dialog=" + r + " text=[" + dlg.Result + "]");
             return r == System.Windows.Forms.DialogResult.OK ? 0 : 1;
+        }
+    }
+
+    static class MdShot
+    {
+        const string NL = "\n";
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var cfg = new LensPop.AppConfig();
+            var tgt = new LensPop.Target();
+            tgt.ProviderName = "Demo"; tgt.Model = "demo-model";
+            var f = new LensPop.ResultForm(cfg, tgt, LensPop.ResultMode.Text, "");
+            string md = "# 标题示例" + NL + "这是 **粗体** 和 `行内代码` 的演示。" + NL + "- 第一点" + NL + "- 第二点" + NL + NL + "```" + NL + "int a = 1;" + NL + "Console.WriteLine(a);" + NL + "```" + NL;
+            var t = typeof(LensPop.ResultForm);
+            var rawField = t.GetField("_raw", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var sb = (System.Text.StringBuilder)rawField.GetValue(f);
+            sb.Append(md);
+            var m = t.GetMethod("RenderMarkdown", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            f.Show();
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            m.Invoke(f, null);
+            for (int i = 0; i < 20; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            var shot = new System.Drawing.Bitmap(b.Width, b.Height);
+            using (var g = System.Drawing.Graphics.FromImage(shot)) g.CopyFromScreen(b.X, b.Y, 0, 0, b.Size);
+            string dir = System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots");
+            System.IO.Directory.CreateDirectory(dir);
+            shot.Save(System.IO.Path.Combine(dir, "md.png"), System.Drawing.Imaging.ImageFormat.Png);
+            shot.Dispose();
+            f.Close();
+            Console.WriteLine("saved md.png");
+            return 0;
         }
     }
     /// <summary>手写 HTTP 假服务：验证 /models 与 SSE 聊天</summary>

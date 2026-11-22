@@ -25,6 +25,7 @@ namespace LensPop
         readonly TextBox _input = new TextBox();
         readonly Button _send = new Button();
         readonly StringBuilder _acc = new StringBuilder();
+        readonly StringBuilder _raw = new StringBuilder();
         readonly object _lock = new object();
         readonly List<ChatMsg> _messages = new List<ChatMsg>();
         readonly List<string> _levels = new List<string>();
@@ -394,6 +395,7 @@ namespace LensPop
             if (_busy) return;
             _busy = true;
             lock (_lock) _acc.Length = 0;
+            _raw.Length = 0;
             SetStatus("生成中…");
             try
             {
@@ -404,6 +406,7 @@ namespace LensPop
                 await Api.ChatAsync(_target, _messages, patch, _cfg.Settings.Stream, OnDelta,
                     _cfg.Settings.TimeoutSec, _cfg.Settings.Temperature, _cfg.Settings.MaxTokens);
                 Flush();
+                RenderMarkdown();
                 SetStatus(TextLength() > 0 ? "完成" : "空回复");
             }
             catch (Exception ex)
@@ -444,6 +447,7 @@ namespace LensPop
                 chunk = _acc.ToString();
                 _acc.Length = 0;
             }
+            _raw.Append(chunk);
             AppendText(chunk);
         }
 
@@ -461,6 +465,101 @@ namespace LensPop
         public void SetStatusText(string text)
         {
             SetStatus(text);
+        }
+
+        /// <summary>把结果按常见 markdown 重排：代码块、标题、列表、粗体、行内代码</summary>
+        void RenderMarkdown()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            string md = _raw.ToString();
+            if (string.IsNullOrEmpty(md)) return;
+            string fence = "```";
+            string tick = "`";
+            if (md.IndexOf(fence) < 0 && md.IndexOf("**") < 0 && md.IndexOf(tick) < 0 &&
+                md.IndexOf("\n-") < 0 && md.IndexOf("\n#") < 0 && md.IndexOf("\n* ") < 0) return;
+
+            _rtb.Clear();
+            var baseFont = Theme.Content;
+            var mono = new Font("Consolas", 9.5f);
+            bool inCode = false;
+            string[] lines = md.Replace("\r\n", "\n").Split('\n');
+            foreach (string raw in lines)
+            {
+                string trimmed = raw.TrimStart();
+                if (trimmed.StartsWith(fence))
+                {
+                    inCode = !inCode;
+                    continue;
+                }
+                if (inCode)
+                {
+                    AppendRun(raw + "\n", mono, Color.FromArgb(30, 41, 59), Color.FromArgb(241, 245, 249));
+                    continue;
+                }
+                if (trimmed.StartsWith("#"))
+                {
+                    string head = trimmed.TrimStart('#').Trim();
+                    AppendRun(head + "\n", new Font("Microsoft YaHei UI", 11.5f, FontStyle.Bold), Theme.Fg, Color.Empty);
+                    continue;
+                }
+                if (trimmed.StartsWith("- ") || trimmed.StartsWith("* "))
+                {
+                    AppendInline("• " + trimmed.Substring(2), baseFont);
+                    AppendRun("\n", baseFont, Theme.Fg, Color.Empty);
+                    continue;
+                }
+                AppendInline(raw, baseFont);
+                AppendRun("\n", baseFont, Theme.Fg, Color.Empty);
+            }
+            _rtb.SelectionStart = _rtb.TextLength;
+            _rtb.ScrollToCaret();
+        }
+
+        void AppendRun(string text, Font f, Color fg, Color bg)
+        {
+            _rtb.SelectionStart = _rtb.TextLength;
+            _rtb.SelectionLength = 0;
+            _rtb.SelectionFont = f;
+            _rtb.SelectionColor = fg;
+            _rtb.SelectionBackColor = bg == Color.Empty ? _rtb.BackColor : bg;
+            _rtb.AppendText(text);
+        }
+
+        /// <summary>处理粗体与行内代码两种行内标记</summary>
+        void AppendInline(string line, Font baseFont)
+        {
+            string tick = "`";
+            int i = 0;
+            while (i < line.Length)
+            {
+                int bold = line.IndexOf("**", i);
+                int code = line.IndexOf(tick, i);
+                int next = -1;
+                bool isBold = false;
+                if (bold >= 0 && (code < 0 || bold < code)) { next = bold; isBold = true; }
+                else if (code >= 0) { next = code; }
+
+                if (next < 0)
+                {
+                    AppendRun(line.Substring(i), baseFont, Theme.Fg, Color.Empty);
+                    return;
+                }
+                if (next > i) AppendRun(line.Substring(i, next - i), baseFont, Theme.Fg, Color.Empty);
+
+                int close = isBold ? line.IndexOf("**", next + 2) : line.IndexOf(tick, next + 1);
+                if (close < 0)
+                {
+                    AppendRun(line.Substring(next), baseFont, Theme.Fg, Color.Empty);
+                    return;
+                }
+                int startLen = isBold ? 2 : 1;
+                string inner = line.Substring(next + startLen, close - next - startLen);
+                if (isBold)
+                    AppendRun(inner, new Font(baseFont, FontStyle.Bold), Theme.Fg, Color.Empty);
+                else
+                    AppendRun(inner, new Font("Consolas", 9.5f), Color.FromArgb(30, 41, 59), Color.FromArgb(241, 245, 249));
+                i = close + startLen;
+            }
         }
 
         void AppendText(string text)
