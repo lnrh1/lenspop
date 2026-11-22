@@ -28,6 +28,7 @@ namespace LensPop
             StartPosition = FormStartPosition.CenterScreen;
             TopMost = true;
             BackColor = Theme.Bg;
+            TopMost = true;
             Font = Theme.UI;
             Size = new Size(720, 620);
             KeyPreview = true;

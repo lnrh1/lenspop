@@ -11,6 +11,8 @@ namespace LensPop
     {
         TabControl _tabs;
         CheckBox _runAsAdmin;
+        Button _shellBtn;
+        Label _shellStatus;
         public static int StartupTab = -1;
         readonly AppConfig _cfg;
         bool _loading = true;
@@ -19,7 +21,6 @@ namespace LensPop
         Label _provEmpty;
         ComboBox _presetBox;
         TextBox _nameBox, _baseBox, _keyBox;
-        Label _noteLabel;
         Button _fetchBtn, _addPoolBtn, _addAllBtn, _delProvBtn, _newProvBtn;
         ListBox _modelList;
         readonly List<string> _models = new List<string>();
@@ -48,9 +49,7 @@ namespace LensPop
         string _currentProvId;
 
         CheckBox _autostart;
-        Button _shellBtn;
-        Label _shellStatus;
-        TextBox _hkCapture, _hkTranslate, _hkShot;
+        TextBox _hkShot;
         Label _status;
 
         public SettingsForm(AppConfig cfg)
@@ -63,6 +62,7 @@ namespace LensPop
             Height = 692;
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Theme.Bg;
+            TopMost = true;
             Font = Theme.UI;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
@@ -265,7 +265,6 @@ namespace LensPop
             foreach (var preset in Providers.All) _presetBox.Items.Add(preset.Name);
             _presetBox.SelectedIndexChanged += delegate { OnPresetChanged(); };
 
-            _noteLabel = Hint(p, "", 200, 64, 480, 34);
 
             L(p, "显示名称", 200, 100, 80);
             _nameBox = T(p, 200, 120, 330, false);
@@ -469,22 +468,16 @@ namespace LensPop
             _runAsAdmin.Font = Theme.UI;
             _runAsAdmin.ForeColor = Theme.Fg;
             p.Controls.Add(_runAsAdmin);
+
             L(p, "图片右键菜单", 14, 92, 100);
             _shellBtn = B(p, "注册", 130, 86, 90, 26);
             _shellBtn.Click += delegate { ToggleShell(); };
             _shellStatus = Hint(p, "", 232, 92, 480, 20);
-
             L(p, "截图（复制/提取）", 14, 130, 150);
             _hkShot = T(p, 200, 126, 130, false);
             Hint(p, "例如 Ctrl+Alt+A", 340, 130, 300, 20);
 
-            L(p, "截图识别", 14, 162, 110);
-            _hkCapture = T(p, 200, 158, 130, false);
-            Hint(p, "例如 Ctrl+Alt+S，框选屏幕区域后识别", 340, 162, 300, 20);
 
-            L(p, "翻译选中文字", 14, 194, 110);
-            _hkTranslate = T(p, 200, 190, 130, false);
-            Hint(p, "选中文字后按它直接翻译（不需要鼠标钩子）", 340, 194, 320, 20);
 
             var diag = B(p, "运行自检", 14, 230, 100, 26);
             diag.Click += delegate { RunDiagnostics(); };
@@ -552,7 +545,6 @@ namespace LensPop
                 _nameBox.Text = "";
                 _baseBox.Text = "";
                 _keyBox.Text = "";
-                _noteLabel.Text = "";
                 _modelList.Items.Clear();
                 _models.Clear();
             }
@@ -565,7 +557,6 @@ namespace LensPop
                 _nameBox.Text = p.Name;
                 _baseBox.Text = p.BaseUrl;
                 _keyBox.Text = p.ApiKey;
-                UpdateNote(Providers.All[idx]);
                 _modelList.Items.Clear();
                 _models.Clear();
             }
@@ -576,7 +567,6 @@ namespace LensPop
         {
             string note = preset.Note;
             if (!string.IsNullOrEmpty(preset.KeyUrl)) note = note + "\r\n拿 Key：" + preset.KeyUrl;
-            _noteLabel.Text = note;
         }
 
         void SetStatusText(string s)
@@ -655,7 +645,6 @@ namespace LensPop
             int i = _presetBox.SelectedIndex;
             if (i < 0 || i >= Providers.All.Count) return;
             var preset = Providers.All[i];
-            UpdateNote(preset);
             if (!string.IsNullOrEmpty(preset.BaseUrl)) _baseBox.Text = preset.BaseUrl;
             string cur = _nameBox.Text.Trim();
             bool looksAuto = cur.Length == 0;
@@ -1000,12 +989,10 @@ namespace LensPop
             _timeout.Value = Math.Max(10, Math.Min(600, s.TimeoutSec));
             _selPopup.Checked = s.SelectionPopup;
             _stream.Checked = s.Stream;
+            UpdateShellStatus();
             _runAsAdmin.Checked = s.RunAsAdmin;
             _hkShot.Text = s.HotkeyShot;
-            _hkCapture.Text = s.HotkeyCapture;
-            _hkTranslate.Text = s.HotkeyTranslate;
             _autostart.Checked = IsAutostart();
-            UpdateShellStatus();
             UpdateSearchTplEnabled();
             _loading = false;
         }
@@ -1015,6 +1002,8 @@ namespace LensPop
             int i = _engineBox.SelectedIndex;
             _searchTpl.Enabled = (i < 0 || SearchEngines.Ids[i] == "custom");
         }
+
+
 
         void UpdateShellStatus()
         {
@@ -1208,7 +1197,6 @@ namespace LensPop
             uint mods;
             uint vk;
             sb.AppendLine("截图热键    : " + (_hkShot.Text.Trim().Length == 0 ? "未设置" : (_hkShot.Text + " " + (HotkeyHost.Parse(_hkShot.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
-            sb.AppendLine("截图识别热键: " + (_hkCapture.Text.Trim().Length == 0 ? "未设置" : (_hkCapture.Text + " " + (HotkeyHost.Parse(_hkCapture.Text, out mods, out vk) ? "格式有效" : "格式无效"))));
             sb.AppendLine("提供商      : " + _cfg.Providers.Count + " 个 / 模型池 " + _cfg.Pool.Count + " 个");
             sb.AppendLine("角色        : 翻译=" + RoleName("translate") + " OCR=" + RoleName("ocr") + " 询问=" + RoleName("ask"));
 
@@ -1308,21 +1296,6 @@ namespace LensPop
             }
             s.HotkeyShot = hshot;
             s.RunAsAdmin = _runAsAdmin.Checked;
-            string hc = _hkCapture.Text.Trim();
-            if (hc.Length > 0 && !HotkeyHost.Parse(hc, out mods, out vk))
-            {
-                _status.Text = "截图热键格式不对：" + hc;
-                return false;
-            }
-            s.HotkeyCapture = hc;
-
-            string ht = _hkTranslate.Text.Trim();
-            if (ht.Length > 0 && !HotkeyHost.Parse(ht, out mods, out vk))
-            {
-                _status.Text = "翻译热键格式不对：" + ht;
-                return false;
-            }
-            s.HotkeyTranslate = ht;
 
             // 提示词
             StashPrompt();

@@ -394,7 +394,6 @@ namespace LensPop
 
             RegisterHotkeys();
 
-            if (_cfg.Settings.ShellMenu && !ShellMenu.IsRegistered()) ShellMenu.Register();
 
             // 第二个实例双击启动时，把设置窗调出来
             try
@@ -546,33 +545,9 @@ namespace LensPop
             m.Items.Add(pop);
             m.Items.Add(new ToolStripSeparator());
 
-            string hkCap = string.IsNullOrEmpty(_cfg.Settings.HotkeyCapture) ? "" : "（" + _cfg.Settings.HotkeyCapture + "）";
-
-            string hkT = string.IsNullOrEmpty(_cfg.Settings.HotkeyTranslate) ? "" : "（" + _cfg.Settings.HotkeyTranslate + "）";
-            m.Items.Add("翻译选中文字" + hkT, null, delegate { TranslateSelection(); });
+            string hkShot = string.IsNullOrEmpty(_cfg.Settings.HotkeyShot) ? "" : "（" + _cfg.Settings.HotkeyShot + "）";
+            m.Items.Add("截图" + hkShot, null, delegate { ShotCapture(); });
             m.Items.Add(new ToolStripSeparator());
-            m.Items.Add("截图（复制 / 提取 / 翻译）", null, delegate { ShotCapture(); });
-            m.Items.Add("截图识别" + hkCap, null, delegate { Capture(false); });
-            m.Items.Add("截图翻译", null, delegate { Capture(true); });
-            m.Items.Add(new ToolStripSeparator());
-            bool shellOn = ShellMenu.IsRegistered();
-            m.Items.Add(shellOn ? "注销图片右键菜单" : "注册图片右键菜单", null, delegate
-            {
-                if (ShellMenu.IsRegistered()) ShellMenu.Unregister();
-                else ShellMenu.Register();
-                _cfg.Settings.ShellMenu = ShellMenu.IsRegistered();
-                _cfg.Save();
-                BuildMenu();
-                try
-                {
-                    _tray.BalloonTipTitle = "图片右键菜单";
-                    _tray.BalloonTipText = _cfg.Settings.ShellMenu
-                        ? "已注册。Win11 需要在图片上右键 →「显示更多选项」里找 LensPop。"
-                        : "已注销。";
-                    _tray.ShowBalloonTip(4000);
-                }
-                catch { }
-            });
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add("打开配置目录", null, delegate
             {
@@ -596,10 +571,7 @@ namespace LensPop
         void RegisterHotkeys()
         {
             _hotkeys.UnregisterAll();
-            string hc = _cfg.Settings.HotkeyCapture;
-            if (!string.IsNullOrEmpty(hc)) _hotkeys.Register(hc, delegate { Capture(false); });
-            string ht = _cfg.Settings.HotkeyTranslate;
-            if (!string.IsNullOrEmpty(ht)) _hotkeys.Register(ht, delegate { TranslateSelection(); });
+
             string hs = _cfg.Settings.HotkeyShot;
             if (!string.IsNullOrEmpty(hs)) _hotkeys.Register(hs, delegate { ShotCapture(); });
         }

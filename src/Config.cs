@@ -43,8 +43,6 @@ namespace LensPop
         public int MaxTokens = 0;
         public int TimeoutSec = 120;
         public string AskLevel = "off";
-        public string HotkeyCapture = "Ctrl+Alt+S";
-        public string HotkeyTranslate = "Ctrl+Alt+T";
         public string HotkeyShot = "Ctrl+Alt+A";
         public bool Autostart = false;
         public bool RunAsAdmin = true;

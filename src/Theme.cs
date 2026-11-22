@@ -234,11 +234,10 @@ namespace LensPop
                 uint myThread = GetCurrentThreadId();
                 bool attached = false;
                 if (fgThread != 0 && fgThread != myThread) attached = AttachThreadInput(myThread, fgThread, true);
-                f.TopMost = true;
+                f.TopMost = true;   // 保持置顶，避免被其它窗口盖住
                 BringWindowToTop(h);
                 SetForegroundWindow(h);
                 f.Activate();
-                f.TopMost = false;
                 if (attached) AttachThreadInput(myThread, fgThread, false);
             }
             catch { }

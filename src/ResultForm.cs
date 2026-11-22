@@ -45,6 +45,7 @@ namespace LensPop
             ShowInTaskbar = true;
             TopMost = true;
             BackColor = Theme.Bg;
+            TopMost = true;
             Font = Theme.UI;
             Size = new Size(480, mode == ResultMode.Ask ? 560 : 440);
             KeyPreview = true;
