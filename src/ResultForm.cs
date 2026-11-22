@@ -26,6 +26,8 @@ namespace LensPop
         readonly Button _send = new Button();
         readonly StringBuilder _acc = new StringBuilder();
         readonly StringBuilder _raw = new StringBuilder();
+        System.Windows.Forms.Timer _renderTimer;
+        bool _renderDirty;
         readonly object _lock = new object();
         readonly List<ChatMsg> _messages = new List<ChatMsg>();
         readonly List<string> _levels = new List<string>();
@@ -448,7 +450,7 @@ namespace LensPop
                 _acc.Length = 0;
             }
             _raw.Append(chunk);
-            AppendText(chunk);
+            ScheduleRender();
         }
 
         public void AppendPlain(string text)
@@ -467,6 +469,24 @@ namespace LensPop
             SetStatus(text);
         }
 
+        /// <summary>流式过程中按 80ms 节流重排 markdown，做到边出边格式化</summary>
+        void ScheduleRender()
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            _renderDirty = true;
+            if (_renderTimer == null)
+            {
+                _renderTimer = new System.Windows.Forms.Timer();
+                _renderTimer.Interval = 80;
+                _renderTimer.Tick += delegate
+                {
+                    if (!_renderDirty) { _renderTimer.Stop(); return; }
+                    _renderDirty = false;
+                    RenderMarkdown();
+                };
+            }
+            if (!_renderTimer.Enabled) _renderTimer.Start();
+        }
         /// <summary>把结果按常见 markdown 重排：代码块、标题、列表、粗体、行内代码</summary>
         void RenderMarkdown()
         {
@@ -475,8 +495,8 @@ namespace LensPop
             if (string.IsNullOrEmpty(md)) return;
             string fence = "```";
             string tick = "`";
-            if (md.IndexOf(fence) < 0 && md.IndexOf("**") < 0 && md.IndexOf(tick) < 0 &&
-                md.IndexOf("\n-") < 0 && md.IndexOf("\n#") < 0 && md.IndexOf("\n* ") < 0) return;
+            bool hasMd = md.IndexOf(fence) >= 0 || md.IndexOf("**") >= 0 || md.IndexOf(tick) >= 0 ||
+                          md.IndexOf("\n-") >= 0 || md.IndexOf("\n#") >= 0 || md.IndexOf("\n* ") >= 0;
 
             _rtb.Clear();
             var baseFont = Theme.Content;
@@ -595,6 +615,12 @@ namespace LensPop
         {
             base.OnShown(e);
             Theme.ForceForeground(this);
+            if (_mode == ResultMode.Ask)
+            {
+                ActiveControl = _input;
+                _input.Focus();
+                _input.Select(_input.TextLength, 0);
+            }
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
