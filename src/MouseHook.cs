@@ -121,7 +121,7 @@ namespace LensPop
                     int dx = info.pt.X - _down.X;
                     int dy = info.pt.Y - _down.Y;
                     int nowTick = Environment.TickCount;
-                    if (Math.Abs(dx) > 6 || Math.Abs(dy) > 6)
+                    if (Math.Abs(dx) > 10 || Math.Abs(dy) > 10)
                     {
                         System.Threading.Interlocked.Increment(ref DragCount);
                         var up = new Point(info.pt.X, info.pt.Y);
@@ -255,7 +255,7 @@ namespace LensPop
         /// 划词主路径：不再预写“哨兵”值（浏览器/Electron 在剪贴板刚被动过时会放弃复制），
         /// 改成「读旧值 → 发 Ctrl+C → 等变化；第二次仍未变化就直接采用剪贴板内容」。
         /// </summary>
-        public static string GrabOnUiThread(int timeoutMs)
+        public static string GrabOnUiThread(int timeoutMs, bool allowUia)
         {
             string before = null;
             try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
@@ -284,7 +284,7 @@ namespace LensPop
                         if (!Clipboard.ContainsText()) continue;
                         string now = Clipboard.GetText();
                         if (string.IsNullOrEmpty(now)) continue;
-                        if (attempt == 0 && before != null && now == before) continue;
+                        if (before != null && now == before) continue;   // 剪贴板没变化 = 没有复制动作（拖窗口/滚动条），继续等或换 UIA
                         Program.LogLine("grab(ui): 成功 " + now.Length + " 字（第" + (attempt + 1) + "次）");
                         return now;
                     }
@@ -293,6 +293,11 @@ namespace LensPop
                 Program.LogLine("grab(ui): 第" + (attempt + 1) + "次没取到");
             }
 
+            if (!allowUia)
+            {
+                Program.LogLine("grab(ui): 两次都没拿到新文字，按无取词处理");
+                return null;
+            }
             Program.LogLine("grab(ui): 剪贴板两次都失败，改用 UI Automation");
             string uia = UiaGrab.TryGetSelection(600);
             if (!string.IsNullOrEmpty(uia))
@@ -309,7 +314,7 @@ namespace LensPop
             string result = null;
             var t = new System.Threading.Thread(delegate()
             {
-                try { result = GrabOnUiThread(timeoutMs); }
+                try { result = GrabOnUiThread(timeoutMs, true); }
                 catch { result = null; }
             });
             t.SetApartmentState(System.Threading.ApartmentState.STA);

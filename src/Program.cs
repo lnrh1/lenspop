@@ -764,7 +764,7 @@ namespace LensPop
             try
             {
                 Point at = Cursor.Position;
-                string text = SelectionGrabber.GrabOnUiThread(600);
+                string text = SelectionGrabber.GrabOnUiThread(600, false);
                 Program.LogLine("双击取词长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
                 if (string.IsNullOrEmpty(text) || text.Trim().Length < 2) return;
                 text = text.Trim();
@@ -796,31 +796,21 @@ namespace LensPop
 
         void DoDragEnded(Point pt)
         {
-            // 在自己的窗口里拖选文字（设置、结果窗）不要弹划词，也别去抢剪贴板
+            // 自己的窗口里拖选不触发；另外取词要静默——没取到文字就什么都不弹
             if (MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id)) return;
-            // 在 UI 线程上取词：后台线程发 Ctrl+C 会明显延迟，实测会一直等到超时
+
             Point at = Cursor.Position;
-            ShowPopupLoading(at);
-            Program.LogLine("取词前前台是自己=" + MouseHook.ForegroundIsSelf(System.Diagnostics.Process.GetCurrentProcess().Id));
-
-            string text = SelectionGrabber.GrabOnUiThread(900);
-            Program.LogLine("取词结果长度=" + (string.IsNullOrEmpty(text) ? 0 : text.Trim().Length));
-
-            if (string.IsNullOrEmpty(text) || text.Trim().Length < 2)
-            {
-                if (_popup != null) _popup.Fail(at, "没取到文字，换个程序试试");
-                return;
-            }
+            string text = SelectionGrabber.GrabOnUiThread(700, false);
+            int len = string.IsNullOrEmpty(text) ? 0 : text.Trim().Length;
+            Program.LogLine("拖拽取词长度=" + len);
+            if (len < 2) return;   // 只是拖动窗口/滚动条，不弹胶囊
 
             text = text.Trim();
             if (text.Length > 6000) text = text.Substring(0, 6000);
-            if (_popup != null)
-            {
-                _popup.Ready(at, text);
-                Program.LogLine("弹层就绪 位置 " + _popup.Bounds.X + "," + _popup.Bounds.Y + " 可见=" + _popup.Visible);
-            }
+            EnsurePopup();
+            _popup.Ready(at, text);
+            Program.LogLine("弹层就绪 位置 " + _popup.Bounds.X + "," + _popup.Bounds.Y + " 可见=" + _popup.Visible);
         }
-
         void EnsurePopup()
         {
             if (_popup != null && !_popup.IsDisposed) return;

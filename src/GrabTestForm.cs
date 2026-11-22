@@ -85,7 +85,7 @@ namespace LensPop
             Application.DoEvents();
 
             // 目标就是本窗口的文本框，必须在本线程上泵消息，否则 Ctrl+C 要等很久才生效
-            string got = SelectionGrabber.GrabOnUiThread(1500);
+            string got = SelectionGrabber.GrabOnUiThread(1500, true);
             ShowResult(got);
         }
 
