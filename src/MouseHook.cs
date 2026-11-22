@@ -255,11 +255,45 @@ namespace LensPop
         /// 划词主路径：不再预写“哨兵”值（浏览器/Electron 在剪贴板刚被动过时会放弃复制），
         /// 改成「读旧值 → 发 Ctrl+C → 等变化；第二次仍未变化就直接采用剪贴板内容」。
         /// </summary>
+        /// <summary>把剪贴板常见格式复制一份，取完词后原样还回去</summary>
+        static DataObject SnapshotClipboard()
+        {
+            try
+            {
+                var d = new DataObject();
+                bool any = false;
+                if (Clipboard.ContainsText()) { d.SetData(DataFormats.UnicodeText, Clipboard.GetText()); any = true; }
+                if (Clipboard.ContainsText(TextDataFormat.Rtf)) { d.SetData(DataFormats.Rtf, Clipboard.GetText(TextDataFormat.Rtf)); any = true; }
+                if (Clipboard.ContainsText(TextDataFormat.Html)) { d.SetData(DataFormats.Html, Clipboard.GetText(TextDataFormat.Html)); any = true; }
+                if (Clipboard.ContainsFileDropList()) { d.SetFileDropList(Clipboard.GetFileDropList()); any = true; }
+                if (Clipboard.ContainsImage()) { var img = Clipboard.GetImage(); if (img != null) { d.SetImage(img); any = true; } }
+                return any ? d : null;
+            }
+            catch { return null; }
+        }
+
+        static void RestoreClipboard(DataObject backup)
+        {
+            if (backup == null) return;
+            for (int i = 0; i < 4; i++)
+            {
+                try { Clipboard.SetDataObject(backup, true); return; }
+                catch { System.Threading.Thread.Sleep(40); }
+            }
+            Program.LogLine("还原剪贴板失败");
+        }
         public static string GrabOnUiThread(int timeoutMs, bool allowUia)
         {
             string before = null;
             try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
             catch { before = null; }
+            DataObject backup = SnapshotClipboard();
+            try { return GrabCore(timeoutMs, allowUia, before); }
+            finally { RestoreClipboard(backup); }
+        }
+
+        static string GrabCore(int timeoutMs, bool allowUia, string before)
+        {
 
             for (int attempt = 0; attempt < 2; attempt++)
             {
