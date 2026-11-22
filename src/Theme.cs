@@ -217,6 +217,7 @@ namespace LensPop
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
         [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr h);
         [DllImport("user32.dll")] static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+        [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
         [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -245,11 +246,20 @@ namespace LensPop
             catch { }
         }
         /// <summary>激活窗口并把焦点真正给到某个控件（跨进程前台锁也能生效）</summary>
+        const uint SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001;
+        const uint SPIF_SENDCHANGE = 0x2;
+
+        /// <summary>把系统的前台锁定超时设为 0，SetForegroundWindow 才会真正生效</summary>
+        public static void UnlockForeground()
+        {
+            try { SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, IntPtr.Zero, SPIF_SENDCHANGE); } catch { }
+        }
         public static void FocusControl(Form f, Control c)
         {
             if (f == null || c == null || f.IsDisposed || !f.IsHandleCreated || !c.IsHandleCreated) return;
             try
             {
+                UnlockForeground();
                 f.TopMost = true;
                 IntPtr fg = GetForegroundWindow();
                 uint pid;

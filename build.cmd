@@ -40,6 +40,7 @@ if not exist dist mkdir dist
   src\LangDetect.cs ^
   src\HtmlDoc.cs ^
   src\AskDialog.cs ^
+  src\KeyCapture.cs ^
   src\UiaGrab.cs ^
   src\MainForm.cs ^
   src\MouseHook.cs ^

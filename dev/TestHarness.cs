@@ -40,6 +40,8 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--ask") return AskShot.Run();
             foreach (string a in args) if (a == "--ask-enter") return AskEnter.Run();
             foreach (string a in args) if (a == "--md") return MdShot.Run();
+            foreach (string a in args) if (a == "--focus") return FocusTest.Run();
+            foreach (string a in args) if (a == "--hooktest") return HookTest.Run();
             try
             {
                 TestImageEncode();
@@ -928,6 +930,80 @@ namespace LensPopTests
             f.Close();
             Console.WriteLine("saved md.png");
             return 0;
+        }
+    }
+
+    static class FocusTest
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);
+        const uint KEYUP = 2;
+        static void TypeText(string s2)
+        {
+            foreach (char ch in s2)
+            {
+                keybd_event((byte)char.ToUpper(ch), 0, 0, System.UIntPtr.Zero);
+                keybd_event((byte)char.ToUpper(ch), 0, KEYUP, System.UIntPtr.Zero);
+            }
+        }
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var other = new Form();
+            other.Text = "mock";
+            other.SetBounds(200, 200, 600, 400);
+            other.Show();
+            other.Activate();
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(50); }
+            var dlg = new LensPop.AskDialog("preset");
+            dlg.Show();
+            for (int i = 0; i < 20; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(50); }
+            IntPtr fg = GetForegroundWindow();
+            Console.WriteLine("fg_is_dialog=" + (fg == dlg.Handle));
+            TypeText("xyz");
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(50); }
+            string txt = dlg.CurrentText;
+            Console.WriteLine("text=[" + txt + "]");
+            try
+            {
+                string outFile = System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots", "focus-result.txt");
+                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outFile));
+                System.IO.File.WriteAllText(outFile, "fg=" + (fg == dlg.Handle) + " text=[" + txt + "]");
+            }
+            catch { }
+
+            bool ok = dlg.CurrentText.IndexOf("xyz") >= 0;
+            dlg.Close();
+            other.Close();
+            Console.WriteLine(ok ? "PASS" : "FAIL");
+            return ok ? 0 : 1;
+        }
+    }
+
+    static class HookTest
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);
+        const uint KEYUP = 2;
+        static void TypeText(string s2) { foreach (char ch in s2) { keybd_event((byte)char.ToUpper(ch), 0, 0, System.UIntPtr.Zero); keybd_event((byte)char.ToUpper(ch), 0, KEYUP, System.UIntPtr.Zero); } }
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var dlg = new LensPop.AskDialog("p");
+            dlg.Show();
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            var other = new Form();
+            other.SetBounds(300, 300, 400, 300);
+            other.Show();
+            other.Activate();
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            TypeText("xyz");
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            string txt = dlg.CurrentText;
+            bool ok = txt.IndexOf("xyz") >= 0;
+            Console.WriteLine("box=[" + txt + "] " + (ok ? "PASS" : "FAIL"));
+            try { System.IO.Directory.CreateDirectory(System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots")); System.IO.File.WriteAllText(System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots", "hook.txt"), txt); } catch { }
+            dlg.Close(); other.Close();
+            return ok ? 0 : 1;
         }
     }
     /// <summary>手写 HTTP 假服务：验证 /models 与 SSE 聊天</summary>

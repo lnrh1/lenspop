@@ -17,6 +17,7 @@ namespace LensPop
         static void Main(string[] args)
         {
             Application.EnableVisualStyles();
+            Theme.UnlockForeground();
             Application.SetCompatibleTextRenderingDefault(false);
 
             string ocrPath = ArgValue(args, "--ocr");
@@ -854,9 +855,17 @@ namespace LensPop
                 Program.Info("还没选「询问」模型。\r\n托盘图标右键 → 设置 → 模型池。");
                 return;
             }
+            // 不用 ShowDialog：胶囊不激活窗口时模态对话框抢不到前台，改成非模态 + 自己跑消息循环
             using (var dlg = new AskDialog(text))
             {
-                if (dlg.ShowDialog() != DialogResult.OK) return;
+                dlg.Show();
+                Theme.FocusControl(dlg, dlg.InputBox);
+                while (!dlg.Finished)
+                {
+                    Application.DoEvents();
+                    System.Threading.Thread.Sleep(10);
+                }
+                if (!dlg.Sent) return;
                 text = dlg.Result;
             }
 

@@ -8,6 +8,12 @@ namespace LensPop
     public class AskDialog : Form
     {
         public string Result = "";
+        public string CurrentText { get { return _box.Text; } }
+        public bool Sent;
+        public TextBox InputBox { get { return _box; } }
+        public bool Finished;
+        KeyCapture _hook;
+        DateTime _shownAt = DateTime.MinValue;
 
         readonly TextBox _box = new TextBox();
 
@@ -59,8 +65,25 @@ namespace LensPop
             };
             Resize += delegate { Theme.Round(this, 10); };
 
+            // 抢不到前台时的兜底：用低级键盘钩子把按键接过来写进输入框
+            _hook = new KeyCapture();
+            _hook.ShouldCapture = delegate { return !IsDisposed && Visible && !_box.Focused && (DateTime.Now - _shownAt).TotalSeconds < 15; };
+            _hook.OnChar = delegate(char ch)
+            {
+                _box.Text = _box.Text.Insert(_box.SelectionStart, ch.ToString());
+                _box.SelectionStart = _box.TextLength;
+            };
+            _hook.OnBackspace = delegate
+            {
+                if (_box.TextLength > 0) _box.Text = _box.Text.Substring(0, _box.TextLength - 1);
+                _box.SelectionStart = _box.TextLength;
+            };
+            _hook.OnEnter = delegate { Send(); };
+            _hook.OnEscape = delegate { Finished = true; DialogResult = DialogResult.Cancel; Close(); };
+            _hook.Install();
             Shown += delegate
             {
+                _shownAt = DateTime.Now;
                 _box.SelectionStart = _box.TextLength;
                 Theme.ForceForeground(this);
                 Theme.FocusControl(this, _box);
@@ -110,6 +133,13 @@ namespace LensPop
                 e.Handled = true;
             }
         }
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            try { if (_hook != null) { _hook.Dispose(); _hook = null; } } catch { }
+            Finished = true;
+            base.OnFormClosed(e);
+        }
+
         void Send()
         {
             string text = _box.Text == null ? "" : _box.Text.Trim();
@@ -122,6 +152,8 @@ namespace LensPop
             }
             if (text.Length == 0) { Close(); return; }
             Result = text;
+            Sent = true;
+            Finished = true;
             DialogResult = DialogResult.OK;
             Close();
         }
