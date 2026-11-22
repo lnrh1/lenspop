@@ -23,7 +23,7 @@ namespace LensPop
         readonly List<Button> _buttons = new List<Button>();
         readonly Timer _autoHide = new Timer();
         int _readyWidth;
-        Button _btnTranslate, _btnSearch, _btnPreview;
+        Button _btnTranslate, _btnSearch, _btnPreview, _btnAsk, _btnGear;
 
         public PopupForm()
         {
@@ -43,16 +43,17 @@ namespace LensPop
 
             _btnTranslate = MakeButton("译  翻译", delegate { Raise(TranslateClicked); });
             _buttons.Add(_btnTranslate);
-            _buttons.Add(MakeButton("问  询问", delegate { Raise(AskClicked); }));
+            _btnAsk = MakeButton("问  询问", delegate { Raise(AskClicked); });
+            _buttons.Add(_btnAsk);
             _btnSearch = MakeButton("搜  搜索", delegate { Raise(SearchClicked); });
             _buttons.Add(_btnSearch);
             _btnPreview = MakeButton("览  预览", delegate { Raise(PreviewClicked); });
             _btnPreview.Visible = false;
             _buttons.Add(_btnPreview);
-            var gear = MakeButton("⚙", delegate { Raise(SettingsClicked); });
-            gear.Width = 30;
-            gear.ForeColor = Color.FromArgb(170, 180, 198);
-            _buttons.Add(gear);
+            _btnGear = MakeButton("⚙", delegate { Raise(SettingsClicked); });
+            _btnGear.Width = 30;
+            _btnGear.ForeColor = Color.FromArgb(170, 180, 198);
+            _buttons.Add(_btnGear);
 
             foreach (var b in _buttons) _flow.Controls.Add(b);
 
@@ -147,16 +148,17 @@ namespace LensPop
             _autoHide.Stop();
             SelectionText = text;
             _status.Visible = false;
-            ShowButtons(_buttons, true);
             bool html = HtmlDoc.IsHtml(text);
-            _btnTranslate.Visible = !html;
-            _btnSearch.Visible = !html;
-            _btnPreview.Visible = html;
+            var show = new List<Control>();
+            show.Add(_btnAsk);
+            if (html) show.Add(_btnPreview);
+            else { show.Add(_btnTranslate); show.Add(_btnSearch); }
+            show.Add(_btnGear);
+            foreach (var b in _buttons) b.Visible = show.Contains(b);
             int w = 8;
-            foreach (var b in _buttons) if (b.Visible) w += b.Width + b.Margin.Horizontal;
+            foreach (var b in show) w += b.Width + b.Margin.Horizontal;
             PlaceAt(screenPoint, w);
         }
-
         /// <summary>没取到：给个明确提示，2 秒后自动消失</summary>
         public void Fail(Point screenPoint, string message)
         {

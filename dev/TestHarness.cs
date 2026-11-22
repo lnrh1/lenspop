@@ -836,6 +836,7 @@ namespace LensPopTests
             Application.EnableVisualStyles();
             var f = new LensPop.PopupForm();
             f.Ready(new System.Drawing.Point(700, 500), "<!DOCTYPE html><html><body><h1>Hello</h1></body></html>");
+            Console.WriteLine("pill width=" + f.Width);
             for (int i = 0; i < 30; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(30); }
             var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
             var shot = new System.Drawing.Bitmap(b.Width, b.Height);
