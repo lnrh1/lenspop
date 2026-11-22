@@ -66,6 +66,13 @@ namespace LensPop
             };
         }
 
+        // 单行输入框里回车/ESC 交给窗体处理，避免被 TextBox 吞掉
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.Enter) { Send(); return true; }
+            if (keyData == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); return true; }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
         void Send()
         {
             string text = _box.Text == null ? "" : _box.Text.Trim();

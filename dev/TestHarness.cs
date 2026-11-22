@@ -38,6 +38,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--shotbar") return ShotBarClick.Run();
             foreach (string a in args) if (a == "--pill-html") return HtmlPill.Run();
             foreach (string a in args) if (a == "--ask") return AskShot.Run();
+            foreach (string a in args) if (a == "--ask-enter") return AskEnter.Run();
             try
             {
                 TestImageEncode();
@@ -870,6 +871,29 @@ namespace LensPopTests
             d.Close();
             Console.WriteLine("saved ask.png");
             return 0;
+        }
+    }
+
+    static class AskEnter
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern void keybd_event(byte b, byte s, uint f, System.UIntPtr e);
+        const byte VK_RETURN = 0x0D;
+        const uint KEYUP = 2;
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var dlg = new LensPop.AskDialog("测试内容 hello");
+            var t = new System.Threading.Thread(delegate()
+            {
+                System.Threading.Thread.Sleep(800);
+                keybd_event(VK_RETURN, 0, 0, System.UIntPtr.Zero);
+                keybd_event(VK_RETURN, 0, KEYUP, System.UIntPtr.Zero);
+            });
+            t.IsBackground = true;
+            t.Start();
+            var r = dlg.ShowDialog();
+            Console.WriteLine("dialog=" + r + " text=[" + dlg.Result + "]");
+            return r == System.Windows.Forms.DialogResult.OK ? 0 : 1;
         }
     }
     /// <summary>手写 HTTP 假服务：验证 /models 与 SSE 聊天</summary>

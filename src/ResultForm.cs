@@ -358,8 +358,18 @@ namespace LensPop
             else if (_mode == ResultMode.Ask)
             {
                 _title.Text = "询问";
-                _input.Focus();
-                SetStatus("输入问题，Enter 发送");
+                if (!string.IsNullOrEmpty(_source))
+                {
+                    // 输入条里已经写好问题：窗口一打开就自动发出去
+                    _messages.Add(new ChatMsg("system", PromptFor(_cfg, "ask")));
+                    _messages.Add(new ChatMsg("user", _source));
+                    RunChat();
+                }
+                else
+                {
+                    _input.Focus();
+                    SetStatus("输入问题，Enter 发送");
+                }
             }
             else
             {
