@@ -215,6 +215,7 @@ namespace LensPop
         }
 
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+        [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr h);
         [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -238,6 +239,27 @@ namespace LensPop
                 BringWindowToTop(h);
                 SetForegroundWindow(h);
                 f.Activate();
+                if (attached) AttachThreadInput(myThread, fgThread, false);
+            }
+            catch { }
+        }
+        /// <summary>激活窗口并把焦点真正给到某个控件（跨进程前台锁也能生效）</summary>
+        public static void FocusControl(Form f, Control c)
+        {
+            if (f == null || c == null || f.IsDisposed || !f.IsHandleCreated || !c.IsHandleCreated) return;
+            try
+            {
+                f.TopMost = true;
+                IntPtr fg = GetForegroundWindow();
+                uint pid;
+                uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out pid);
+                uint myThread = GetCurrentThreadId();
+                bool attached = false;
+                if (fgThread != 0 && fgThread != myThread) attached = AttachThreadInput(myThread, fgThread, true);
+                SetForegroundWindow(f.Handle);
+                f.Activate();
+                c.Focus();
+                SetFocus(c.Handle);
                 if (attached) AttachThreadInput(myThread, fgThread, false);
             }
             catch { }

@@ -420,7 +420,7 @@ namespace LensPop
             finally
             {
                 _busy = false;
-                if (_mode == ResultMode.Ask) _input.Focus();
+                if (_mode == ResultMode.Ask) Theme.FocusControl(this, _input);
             }
         }
 
@@ -618,8 +618,26 @@ namespace LensPop
             if (_mode == ResultMode.Ask)
             {
                 ActiveControl = _input;
-                _input.Focus();
                 _input.Select(_input.TextLength, 0);
+                // 窗口刚显示时还抢不到前台，延时再抢一次焦点
+                var t1 = new System.Windows.Forms.Timer();
+                t1.Interval = 120;
+                t1.Tick += delegate
+                {
+                    t1.Stop();
+                    t1.Dispose();
+                    Theme.FocusControl(this, _input);
+                };
+                t1.Start();
+                var t2 = new System.Windows.Forms.Timer();
+                t2.Interval = 420;
+                t2.Tick += delegate
+                {
+                    t2.Stop();
+                    t2.Dispose();
+                    Theme.FocusControl(this, _input);
+                };
+                t2.Start();
             }
         }
 
