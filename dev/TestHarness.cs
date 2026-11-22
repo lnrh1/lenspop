@@ -36,6 +36,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--screen") return ScreenInfo.Run();
             foreach (string a in args) if (a == "--screenshot") return ScreenShot.Run();
             foreach (string a in args) if (a == "--shotbar") return ShotBarClick.Run();
+            foreach (string a in args) if (a == "--pill-html") return HtmlPill.Run();
             try
             {
                 TestImageEncode();
@@ -823,6 +824,28 @@ namespace LensPopTests
             shot.Save(file, System.Drawing.Imaging.ImageFormat.Png);
             shot.Dispose();
             Console.WriteLine("saved " + file + " " + b.Width + "x" + b.Height);
+            return 0;
+        }
+    }
+
+    // HTML 模式的胶囊（截图用）
+    static class HtmlPill
+    {
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var f = new LensPop.PopupForm();
+            f.Ready(new System.Drawing.Point(700, 500), "<!DOCTYPE html><html><body><h1>Hello</h1></body></html>");
+            for (int i = 0; i < 30; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(30); }
+            var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            var shot = new System.Drawing.Bitmap(b.Width, b.Height);
+            using (var g = System.Drawing.Graphics.FromImage(shot)) g.CopyFromScreen(b.X, b.Y, 0, 0, b.Size);
+            string dir = System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots");
+            System.IO.Directory.CreateDirectory(dir);
+            shot.Save(System.IO.Path.Combine(dir, "pill-html.png"), System.Drawing.Imaging.ImageFormat.Png);
+            shot.Dispose();
+            f.Close();
+            Console.WriteLine("saved pill-html.png");
             return 0;
         }
     }

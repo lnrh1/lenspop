@@ -12,6 +12,7 @@ namespace LensPop
         public event EventHandler AskClicked;
         public event EventHandler SearchClicked;
         public event EventHandler SettingsClicked;
+        public event EventHandler PreviewClicked;
 
         public string SelectionText = "";
 
@@ -22,6 +23,7 @@ namespace LensPop
         readonly List<Button> _buttons = new List<Button>();
         readonly Timer _autoHide = new Timer();
         int _readyWidth;
+        Button _btnTranslate, _btnSearch, _btnPreview;
 
         public PopupForm()
         {
@@ -39,9 +41,14 @@ namespace LensPop
             _flow.BackColor = BackColor;
             Controls.Add(_flow);
 
-            _buttons.Add(MakeButton("译  翻译", delegate { Raise(TranslateClicked); }));
+            _btnTranslate = MakeButton("译  翻译", delegate { Raise(TranslateClicked); });
+            _buttons.Add(_btnTranslate);
             _buttons.Add(MakeButton("问  询问", delegate { Raise(AskClicked); }));
-            _buttons.Add(MakeButton("搜  搜索", delegate { Raise(SearchClicked); }));
+            _btnSearch = MakeButton("搜  搜索", delegate { Raise(SearchClicked); });
+            _buttons.Add(_btnSearch);
+            _btnPreview = MakeButton("览  预览", delegate { Raise(PreviewClicked); });
+            _btnPreview.Visible = false;
+            _buttons.Add(_btnPreview);
             var gear = MakeButton("⚙", delegate { Raise(SettingsClicked); });
             gear.Width = 30;
             gear.ForeColor = Color.FromArgb(170, 180, 198);
@@ -141,7 +148,13 @@ namespace LensPop
             SelectionText = text;
             _status.Visible = false;
             ShowButtons(_buttons, true);
-            PlaceAt(screenPoint, _readyWidth);
+            bool html = HtmlDoc.IsHtml(text);
+            _btnTranslate.Visible = !html;
+            _btnSearch.Visible = !html;
+            _btnPreview.Visible = html;
+            int w = 8;
+            foreach (var b in _buttons) if (b.Visible) w += b.Width + b.Margin.Horizontal;
+            PlaceAt(screenPoint, w);
         }
 
         /// <summary>没取到：给个明确提示，2 秒后自动消失</summary>

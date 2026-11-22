@@ -38,6 +38,7 @@ if not exist dist mkdir dist
   src\GrabTestForm.cs ^
   src\ShotBar.cs ^
   src\LangDetect.cs ^
+  src\HtmlDoc.cs ^
   src\UiaGrab.cs ^
   src\MainForm.cs ^
   src\MouseHook.cs ^

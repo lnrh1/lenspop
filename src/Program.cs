@@ -795,6 +795,7 @@ namespace LensPop
             _popup.AskClicked += delegate { Program.LogLine("点击胶囊: 询问"); OpenAsk(_popup.SelectionText); };
             _popup.SearchClicked += delegate { Program.LogLine("点击胶囊: 搜索"); Search(_popup.SelectionText); };
             _popup.SettingsClicked += delegate { Program.LogLine("点击胶囊: 设置"); OpenSettings(); };
+            _popup.PreviewClicked += delegate { Program.LogLine("点击胶囊: 预览"); PreviewHtml(_popup.SelectionText); };
         }
 
         void ShowPopupLoading(Point pt)
@@ -808,6 +809,24 @@ namespace LensPop
             if (_popup != null && _popup.Visible) _popup.Hide();
         }
 
+        /// <summary>把选中的 HTML 存成临时文件，用默认浏览器渲染</summary>
+        void PreviewHtml(string html)
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "LensPop");
+                System.IO.Directory.CreateDirectory(dir);
+                string file = System.IO.Path.Combine(dir, "preview-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".html");
+                System.IO.File.WriteAllText(file, html, System.Text.Encoding.UTF8);
+                Program.LogLine("预览 HTML: " + file);
+                Process.Start(new ProcessStartInfo(file) { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                Program.LogLine("预览失败: " + ex.Message);
+                MessageBox.Show("预览失败：" + ex.Message);
+            }
+        }
         void OpenTranslate(string text)
         {
             Program.LogLine("点击胶囊: 翻译");
