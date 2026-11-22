@@ -74,13 +74,43 @@ namespace LensPop
         public Settings Settings = new Settings();
 
         [ScriptIgnore]
+        static string _dir;
+
+        /// <summary>配置目录：优先 %APPDATA%，不可写就退到 %LOCALAPPDATA%，再退到临时目录</summary>
         public static string Dir
         {
             get
             {
-                string d = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LensPop");
-                if (!Directory.Exists(d)) Directory.CreateDirectory(d);
-                return d;
+                if (_dir != null) return _dir;
+
+                string[] bases = new string[]
+                {
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    System.IO.Path.GetTempPath()
+                };
+
+                foreach (string b in bases)
+                {
+                    if (string.IsNullOrEmpty(b)) continue;
+                    for (int attempt = 0; attempt < 2; attempt++)
+                    {
+                        try
+                        {
+                            string d = Path.Combine(b, "LensPop");
+                            Directory.CreateDirectory(d);
+                            string probe = Path.Combine(d, ".write-test");
+                            File.WriteAllText(probe, "x");
+                            File.Delete(probe);
+                            _dir = d;
+                            return d;
+                        }
+                        catch { System.Threading.Thread.Sleep(120); }
+                    }
+                }
+
+                try { _dir = Path.Combine(System.IO.Path.GetTempPath(), "LensPop"); Directory.CreateDirectory(_dir); } catch { _dir = Path.Combine(bases[0], "LensPop"); }
+                return _dir;
             }
         }
 

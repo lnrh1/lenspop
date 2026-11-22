@@ -454,7 +454,7 @@ namespace LensPop
                 " 图标可见=" + _tray.Visible + " 管理员=" + Program.IsAdmin());
 
             bool firstRun = !System.IO.File.Exists(AppConfig.FilePath);
-            Program.LogLine("启动 firstRun=" + firstRun + " cfg=" + AppConfig.FilePath);
+            Program.LogLine("启动 firstRun=" + firstRun + " cfg=" + AppConfig.FilePath + " 配置目录=" + AppConfig.Dir);
             try
             {
                 _invoker.BeginInvoke(new Action(delegate
