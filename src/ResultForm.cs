@@ -28,6 +28,9 @@ namespace LensPop
         readonly StringBuilder _raw = new StringBuilder();
         System.Windows.Forms.Timer _renderTimer;
         bool _renderDirty;
+        KeyCapture _keyHook;
+        DateTime _shownAt = DateTime.MinValue;
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         readonly object _lock = new object();
         readonly List<ChatMsg> _messages = new List<ChatMsg>();
         readonly List<string> _levels = new List<string>();
@@ -611,12 +614,41 @@ namespace LensPop
             catch { SetStatus("复制失败"); }
         }
 
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            try { if (_keyHook != null) { _keyHook.Dispose(); _keyHook = null; } } catch { }
+            base.OnFormClosed(e);
+        }
+
         protected override void OnShown(EventArgs e)
         {
             base.OnShown(e);
             Theme.ForceForeground(this);
+            _shownAt = DateTime.Now;
             if (_mode == ResultMode.Ask)
             {
+                // 抢不到前台时的兜底：键盘钩子把按键接过来写进输入框
+                try
+                {
+                    _keyHook = new KeyCapture();
+                    _keyHook.ShouldCapture = delegate
+                    {
+                        return !IsDisposed && Visible && (DateTime.Now - _shownAt).TotalSeconds < 120 && GetForegroundWindow() != Handle;
+                    };
+                    _keyHook.OnChar = delegate(char ch)
+                    {
+                        _input.Text = _input.Text.Insert(_input.SelectionStart, ch.ToString());
+                        _input.SelectionStart = _input.TextLength;
+                    };
+                    _keyHook.OnBackspace = delegate
+                    {
+                        if (_input.TextLength > 0) _input.Text = _input.Text.Substring(0, _input.TextLength - 1);
+                    };
+                    _keyHook.OnEnter = delegate { SendQuestion(); };
+                    _keyHook.Install();
+                }
+                catch { }
+
                 ActiveControl = _input;
                 _input.Select(_input.TextLength, 0);
                 // 窗口刚显示时还抢不到前台，延时再抢一次焦点

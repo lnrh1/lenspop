@@ -7,6 +7,8 @@ namespace LensPop
     /// <summary>询问前的单行输入条：预填带引号的划词内容，回车发送</summary>
     public class AskDialog : Form
     {
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+
         public string Result = "";
         public string CurrentText { get { return _box.Text; } }
         public bool Sent;
@@ -14,6 +16,7 @@ namespace LensPop
         public bool Finished;
         KeyCapture _hook;
         DateTime _shownAt = DateTime.MinValue;
+        bool _hookedOnce;
 
         readonly TextBox _box = new TextBox();
 
@@ -67,9 +70,20 @@ namespace LensPop
 
             // 抢不到前台时的兜底：用低级键盘钩子把按键接过来写进输入框
             _hook = new KeyCapture();
-            _hook.ShouldCapture = delegate { return !IsDisposed && Visible && !_box.Focused && (DateTime.Now - _shownAt).TotalSeconds < 15; };
+            _hook.ShouldCapture = delegate
+            {
+                if (IsDisposed || !Visible) return false;
+                if ((DateTime.Now - _shownAt).TotalSeconds > 15) return false;
+                // 只有「我们的窗口不在前台」时才由钩子接管，跟控件是否 Focused 无关
+                return GetForegroundWindow() != Handle;
+            };
             _hook.OnChar = delegate(char ch)
             {
+                if (!_hookedOnce)
+                {
+                    _hookedOnce = true;
+                    Program.LogLine("输入条：键盘钩子接管输入（窗口未获前台）");
+                }
                 _box.Text = _box.Text.Insert(_box.SelectionStart, ch.ToString());
                 _box.SelectionStart = _box.TextLength;
             };
