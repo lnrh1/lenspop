@@ -216,6 +216,7 @@ namespace LensPop
 
         [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
         [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr h);
+        [DllImport("user32.dll")] static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
         [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
@@ -256,6 +257,8 @@ namespace LensPop
                 uint myThread = GetCurrentThreadId();
                 bool attached = false;
                 if (fgThread != 0 && fgThread != myThread) attached = AttachThreadInput(myThread, fgThread, true);
+                keybd_event(0x12, 0, 0, UIntPtr.Zero);
+                keybd_event(0x12, 0, 2, UIntPtr.Zero);
                 SetForegroundWindow(f.Handle);
                 f.Activate();
                 c.Focus();

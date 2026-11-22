@@ -61,8 +61,24 @@ namespace LensPop
 
             Shown += delegate
             {
-                _box.Focus();
                 _box.SelectionStart = _box.TextLength;
+                Theme.ForceForeground(this);
+                Theme.FocusControl(this, _box);
+
+                // 窗口刚映射时前台可能还没切过来，延时再抢两次焦点
+                foreach (int delay in new int[] { 100, 300 })
+                {
+                    var t = new System.Windows.Forms.Timer();
+                    t.Interval = delay;
+                    t.Tick += delegate
+                    {
+                        t.Stop();
+                        t.Dispose();
+                        Theme.FocusControl(this, _box);
+                        _box.SelectionStart = _box.TextLength;
+                    };
+                    t.Start();
+                }
             };
         }
 
@@ -72,6 +88,27 @@ namespace LensPop
             if (keyData == Keys.Enter) { Send(); return true; }
             if (keyData == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); return true; }
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+        // 兜底：即使焦点没落到输入框，窗体收到按键也直接写进输入框
+        protected override void OnKeyPress(KeyPressEventArgs e)
+        {
+            base.OnKeyPress(e);
+            if (_box.Focused || e.KeyChar < 32) return;
+            _box.Text = _box.Text.Insert(_box.SelectionStart, e.KeyChar.ToString());
+            _box.SelectionStart = _box.TextLength;
+            e.Handled = true;
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (_box.Focused) return;
+            if (e.KeyCode == Keys.Back)
+            {
+                if (_box.TextLength > 0) _box.Text = _box.Text.Substring(0, _box.TextLength - 1);
+                _box.SelectionStart = _box.TextLength;
+                e.Handled = true;
+            }
         }
         void Send()
         {
