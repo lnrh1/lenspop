@@ -15,6 +15,7 @@ namespace LensPop
         public TextBox InputBox { get { return _box; } }
         public bool Finished;
         KeyCapture _hook;
+        MouseWatch _mouse;
         DateTime _shownAt = DateTime.MinValue;
         bool _hookedOnce;
 
@@ -73,11 +74,9 @@ namespace LensPop
             _hook.ShouldCapture = delegate
             {
                 if (IsDisposed || !Visible) return false;
-                // 只在刚弹出的 3 秒内接管按键，之后交给系统正常处理，避免把别的程序的输入吃掉
-                if ((DateTime.Now - _shownAt).TotalSeconds > 3) return false;
-                if (GetForegroundWindow() == Handle) return false;   // 已经拿到前台就不用接管了
-                // 只有「我们的窗口不在前台」时才由钩子接管，跟控件是否 Focused 无关
-                return GetForegroundWindow() != Handle;
+                // 窗口还开着就一直兜底；点到窗口外面会自动关闭，所以不会误吃别的程序输入
+                if ((DateTime.Now - _shownAt).TotalSeconds > 60) return false;
+                return GetForegroundWindow() != Handle;   // 前台是我们自己就交给系统正常输入
             };
             _hook.OnChar = delegate(char ch)
             {
@@ -97,6 +96,18 @@ namespace LensPop
             _hook.OnEnter = delegate { Send(); };
             _hook.OnEscape = delegate { Finished = true; DialogResult = DialogResult.Cancel; Close(); };
             _hook.Install();
+            // 点到窗口外面就关掉输入条，避免继续接管键盘
+            _mouse = new MouseWatch();
+            _mouse.OnLeftDown = delegate(Point p)
+            {
+                try
+                {
+                    if (!Bounds.Contains(p)) { Finished = true; Close(); }
+                }
+                catch { }
+            };
+            _mouse.Install();
+
             Shown += delegate
             {
                 _shownAt = DateTime.Now;
@@ -152,6 +163,7 @@ namespace LensPop
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             try { if (_hook != null) { _hook.Dispose(); _hook = null; } } catch { }
+            try { if (_mouse != null) { _mouse.Dispose(); _mouse = null; } } catch { }
             Finished = true;
             base.OnFormClosed(e);
         }

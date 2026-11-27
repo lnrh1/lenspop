@@ -85,4 +85,53 @@ namespace LensPop
             return CallNextHookEx(_hook, nCode, wParam, lParam);
         }
     }
+
+    /// <summary>监听一次左键按下：点在窗口外就关掉输入条，避免继续抢键
+    public class MouseWatch : IDisposable
+    {
+        delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+        [DllImport("user32.dll")]
+        static extern bool UnhookWindowsHookEx(IntPtr hhk);
+        [DllImport("user32.dll")]
+        static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("kernel32.dll")]
+        static extern IntPtr GetModuleHandle(string name);
+
+        const int WH_MOUSE_LL = 14;
+        const int WM_LBUTTONDOWN = 0x0201;
+
+        HookProc _proc;
+        IntPtr _hook = IntPtr.Zero;
+        public Action<System.Drawing.Point> OnLeftDown;
+
+        public bool Install()
+        {
+            _proc = Callback;
+            _hook = SetWindowsHookEx(WH_MOUSE_LL, _proc, GetModuleHandle(null), 0);
+            return _hook != IntPtr.Zero;
+        }
+
+        public void Dispose()
+        {
+            if (_hook != IntPtr.Zero) { UnhookWindowsHookEx(_hook); _hook = IntPtr.Zero; }
+        }
+
+        IntPtr Callback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            try
+            {
+                if (nCode >= 0 && wParam == (IntPtr)WM_LBUTTONDOWN && OnLeftDown != null)
+                {
+                    int x = Marshal.ReadInt32(lParam);
+                    int y = Marshal.ReadInt32(lParam, 4);
+                    OnLeftDown(new System.Drawing.Point(x, y));
+                }
+            }
+            catch { }
+            return CallNextHookEx(_hook, nCode, wParam, lParam);
+        }
+    }
 }
