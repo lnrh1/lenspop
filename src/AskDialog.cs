@@ -32,7 +32,7 @@ namespace LensPop
             Size = new Size(680, 54);
             KeyPreview = true;
             DoubleBuffered = true;
-            Padding = new Padding(14, 12, 96, 12);
+            Padding = new Padding(14, 12, 124, 12);
 
             _box.BorderStyle = BorderStyle.None;
             _box.Font = new Font("Microsoft YaHei UI", 10.5f);
@@ -50,7 +50,7 @@ namespace LensPop
             var send = Theme.FlatButton("发送", true);
             send.Width = 64;
             send.Height = 30;
-            send.SetBounds(Width - 78, 12, 64, 30);
+            send.SetBounds(Width - 100, 12, 64, 30);
             send.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             send.Click += delegate { Send(); };
             Controls.Add(send);
@@ -168,6 +168,10 @@ namespace LensPop
             base.OnFormClosed(e);
         }
 
+        bool _hoverClose;
+
+        Rectangle CloseRect { get { return new Rectangle(Width - 32, 15, 20, 20); } }
+
         void Send()
         {
             string text = _box.Text == null ? "" : _box.Text.Trim();
@@ -186,9 +190,34 @@ namespace LensPop
             Close();
         }
 
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            bool h = CloseRect.Contains(e.Location);
+            if (h != _hoverClose) { _hoverClose = h; Cursor = h ? Cursors.Hand : Cursors.IBeam; Invalidate(); }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            if (_hoverClose) { _hoverClose = false; Invalidate(); }
+            base.OnMouseLeave(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (CloseRect.Contains(e.Location)) { Finished = true; DialogResult = DialogResult.Cancel; Close(); return; }
+            base.OnMouseDown(e);
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
+            var cr = CloseRect;
+            using (var pen = new Pen(_hoverClose ? Color.FromArgb(220, 38, 38) : Color.FromArgb(148, 163, 184), 1.6f))
+            {
+                int pad = 5;
+                e.Graphics.DrawLine(pen, cr.Left + pad, cr.Top + pad, cr.Right - pad, cr.Bottom - pad);
+                e.Graphics.DrawLine(pen, cr.Right - pad, cr.Top + pad, cr.Left + pad, cr.Bottom - pad);
+            }
             using (var pen = new Pen(Theme.Line))
                 e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
         }
