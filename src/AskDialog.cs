@@ -73,7 +73,9 @@ namespace LensPop
             _hook.ShouldCapture = delegate
             {
                 if (IsDisposed || !Visible) return false;
-                if ((DateTime.Now - _shownAt).TotalSeconds > 15) return false;
+                // 只在刚弹出的 3 秒内接管按键，之后交给系统正常处理，避免把别的程序的输入吃掉
+                if ((DateTime.Now - _shownAt).TotalSeconds > 3) return false;
+                if (GetForegroundWindow() == Handle) return false;   // 已经拿到前台就不用接管了
                 // 只有「我们的窗口不在前台」时才由钩子接管，跟控件是否 Focused 无关
                 return GetForegroundWindow() != Handle;
             };

@@ -633,7 +633,7 @@ namespace LensPop
                     _keyHook = new KeyCapture();
                     _keyHook.ShouldCapture = delegate
                     {
-                        return !IsDisposed && Visible && (DateTime.Now - _shownAt).TotalSeconds < 120 && GetForegroundWindow() != Handle;
+                        return !IsDisposed && Visible && (DateTime.Now - _shownAt).TotalSeconds < 3 && GetForegroundWindow() != Handle;
                     };
                     _keyHook.OnChar = delegate(char ch)
                     {
