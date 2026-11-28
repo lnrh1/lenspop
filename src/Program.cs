@@ -123,6 +123,10 @@ namespace LensPop
         public static int ClipboardQuiet;
         /// <summary>在这之前不弹「已复制」提示（毫秒 tick）——取词/截图会短暂改写剪贴板</summary>
         public static int ClipboardQuietUntil;
+        /// <summary>我们自己写回剪贴板的文本，用来识别「这次变化是我造成的」</summary>
+        public static string OwnClipboardText;
+        /// <summary>接下来要忽略几次剪贴板变化（我们自己引发的：复制 + 还原）</summary>
+        public static int IgnoreClipboardUpdates;
 
         public static bool IsAdmin()
         {
@@ -661,7 +665,8 @@ namespace LensPop
             {
                 System.Threading.Interlocked.Increment(ref Program.ClipboardQuiet);
                 try { Clipboard.SetImage(bmp); } catch { }
-                Program.ClipboardQuietUntil = Environment.TickCount + 2500;
+                Program.ClipboardQuietUntil = Environment.TickCount + 100;
+                Program.IgnoreClipboardUpdates = 1;
                 System.Threading.Interlocked.Decrement(ref Program.ClipboardQuiet);
                 if (_lastShot != null) { try { _lastShot.Dispose(); } catch { } }
                 _lastShot = bmp;

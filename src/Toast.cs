@@ -99,7 +99,17 @@ namespace LensPop
         void OnChanged()
         {
             if (Program.ClipboardQuiet > 0) return;            // 正在动剪贴板
+            if (System.Threading.Interlocked.CompareExchange(ref Program.IgnoreClipboardUpdates, 0, 0) > 0)
+            {
+                System.Threading.Interlocked.Decrement(ref Program.IgnoreClipboardUpdates);
+                return;
+            }
             if (Environment.TickCount < Program.ClipboardQuietUntil) return;   // 刚被我们自己改过（取词/截图）
+            try
+            {
+                if (Program.OwnClipboardText != null && Clipboard.ContainsText() && Clipboard.GetText() == Program.OwnClipboardText) return;
+            }
+            catch { }
             // 自己窗口在前台时的复制也不用提示
             try
             {
