@@ -290,7 +290,7 @@ namespace LensPop
             DataObject backup = SnapshotClipboard();
             System.Threading.Interlocked.Increment(ref Program.ClipboardQuiet);
             try { return GrabCore(timeoutMs, allowUia, before); }
-            finally { RestoreClipboard(backup); System.Threading.Interlocked.Decrement(ref Program.ClipboardQuiet); }
+            finally { RestoreClipboard(backup); Program.ClipboardQuietUntil = Environment.TickCount + 2500; System.Threading.Interlocked.Decrement(ref Program.ClipboardQuiet); }
         }
 
         static string GrabCore(int timeoutMs, bool allowUia, string before)

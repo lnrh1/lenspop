@@ -24,7 +24,7 @@ namespace LensPop
             Size = new Size(150, 40);
             Opacity = 0.96;
 
-            _timer.Interval = 1100;
+            _timer.Interval = 1800;
             _timer.Tick += delegate { _timer.Stop(); Hide(); };
         }
 
@@ -66,6 +66,8 @@ namespace LensPop
     {
         [DllImport("user32.dll", SetLastError = true)]
         static extern bool AddClipboardFormatListener(IntPtr hwnd);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
         [DllImport("user32.dll", SetLastError = true)]
         static extern bool RemoveClipboardFormatListener(IntPtr hwnd);
 
@@ -96,7 +98,16 @@ namespace LensPop
 
         void OnChanged()
         {
-            if (Program.ClipboardQuiet > 0) return;      // 我们自己动剪贴板时不提示
+            if (Program.ClipboardQuiet > 0) return;            // 正在动剪贴板
+            if (Environment.TickCount < Program.ClipboardQuietUntil) return;   // 刚被我们自己改过（取词/截图）
+            // 自己窗口在前台时的复制也不用提示
+            try
+            {
+                uint pid;
+                GetWindowThreadProcessId(GetForegroundWindow(), out pid);
+                if (pid == (uint)System.Diagnostics.Process.GetCurrentProcess().Id) return;
+            }
+            catch { }
             bool has = false;
             try { has = Clipboard.ContainsText() || Clipboard.ContainsImage() || Clipboard.ContainsFileDropList(); }
             catch { has = false; }
