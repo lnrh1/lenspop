@@ -42,6 +42,7 @@ namespace LensPopTests
             foreach (string a in args) if (a == "--md") return MdShot.Run();
             foreach (string a in args) if (a == "--focus") return FocusTest.Run();
             foreach (string a in args) if (a == "--hooktest") return HookTest.Run();
+            foreach (string a in args) if (a == "--snap") return SnapShot.Run();
             try
             {
                 TestImageEncode();
@@ -1004,6 +1005,42 @@ namespace LensPopTests
             try { System.IO.Directory.CreateDirectory(System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots")); System.IO.File.WriteAllText(System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots", "hook.txt"), txt); } catch { }
             dlg.Close(); other.Close();
             return ok ? 0 : 1;
+        }
+    }
+
+    static class SnapShot
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+        public static int Run()
+        {
+            Application.EnableVisualStyles();
+            var mock = new Form();
+            mock.Text = "mock-window";
+            mock.SetBounds(300, 200, 520, 340);
+            mock.Show();
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            System.Drawing.Bitmap shot = null;
+            var cap = new LensPop.CaptureForm(delegate(System.Drawing.Bitmap b, System.Drawing.Point p) { shot = b; });
+            cap.Show();
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            SetCursorPos(560, 370);
+            for (int i = 0; i < 10; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(40); }
+            try
+            {
+                var b2 = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                using (var shotBmp = new System.Drawing.Bitmap(b2.Width, b2.Height))
+                {
+                    using (var g2 = System.Drawing.Graphics.FromImage(shotBmp)) g2.CopyFromScreen(b2.X, b2.Y, 0, 0, b2.Size);
+                    string dir2 = System.IO.Path.Combine(Environment.CurrentDirectory, "dev", "shots");
+                    System.IO.Directory.CreateDirectory(dir2);
+                    shotBmp.Save(System.IO.Path.Combine(dir2, "snap.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+            }
+            catch { }
+            cap.Close();
+            mock.Close();
+            Console.WriteLine("snap test done");
+            return 0;
         }
     }
     /// <summary>手写 HTTP 假服务：验证 /models 与 SSE 聊天</summary>

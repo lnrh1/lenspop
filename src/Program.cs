@@ -119,6 +119,9 @@ namespace LensPop
             }
         }
 
+        /// <summary>大于 0 表示剪贴板正在被我们自己使用，复制提示应当忽略</summary>
+        public static int ClipboardQuiet;
+
         public static bool IsAdmin()
         {
             try
@@ -243,6 +246,7 @@ namespace LensPop
         readonly Form _invoker = new Form();
         PopupForm _popup;
         ShotBarForm _shotbar;
+        ClipboardWatcher _clipWatch;
         Bitmap _lastShot;
         MainForm _main;
         AppConfig _cfg;
@@ -464,7 +468,8 @@ namespace LensPop
             {
                 _invoker.BeginInvoke(new Action(delegate
                 {
-                    Program.LogLine("进入首屏逻辑");
+                    try { _clipWatch = new ClipboardWatcher(); _clipWatch.Start(); } catch (Exception ex) { Program.LogLine("剪贴板监听失败: " + ex.Message); }
+            Program.LogLine("进入首屏逻辑");
                     try
                     {
                         _tray.BalloonTipTitle = firstRun ? "LensPop 已启动" : "LensPop 已在托盘运行";
@@ -652,7 +657,9 @@ namespace LensPop
             _cfg = AppConfig.Load();
             var f = new CaptureForm(delegate(Bitmap bmp, Point at)
             {
+                System.Threading.Interlocked.Increment(ref Program.ClipboardQuiet);
                 try { Clipboard.SetImage(bmp); } catch { }
+                System.Threading.Interlocked.Decrement(ref Program.ClipboardQuiet);
                 if (_lastShot != null) { try { _lastShot.Dispose(); } catch { } }
                 _lastShot = bmp;
                 ShowShotBar(at);

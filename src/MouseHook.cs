@@ -288,8 +288,9 @@ namespace LensPop
             try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); }
             catch { before = null; }
             DataObject backup = SnapshotClipboard();
+            System.Threading.Interlocked.Increment(ref Program.ClipboardQuiet);
             try { return GrabCore(timeoutMs, allowUia, before); }
-            finally { RestoreClipboard(backup); }
+            finally { RestoreClipboard(backup); System.Threading.Interlocked.Decrement(ref Program.ClipboardQuiet); }
         }
 
         static string GrabCore(int timeoutMs, bool allowUia, string before)

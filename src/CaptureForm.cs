@@ -5,14 +5,31 @@ using System.Windows.Forms;
 
 namespace LensPop
 {
-    /// <summary>框选屏幕区域（截图 / OCR / 图片翻译都用它）</summary>
+    /// <summary>框选屏幕区域，支持像截图工具那样吸附窗口</summary>
     public class CaptureForm : Form
     {
-        [DllImport("user32.dll")]
-        static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
-
         [StructLayout(LayoutKind.Sequential)]
         struct RECT { public int Left, Top, Right, Bottom; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct POINT { public int X, Y; }
+
+        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+        [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
+        [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr hWnd, uint flags);
+        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int index);
+        [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int index, int value);
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT rect, int size);
+        [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);
+        [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+        [DllImport("gdi32.dll")] static extern int GetDeviceCaps(IntPtr hdc, int index);
+
+        const int GWL_EXSTYLE = -20;
+        const int WS_EX_TRANSPARENT = 0x20;
+        const uint GA_ROOT = 2;
+        const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+        const int DESKTOPHORZRES = 118;
+        const int DESKTOPVERTRES = 117;
 
         readonly Action<Bitmap, Point> _done;
         Bitmap _screen;
@@ -21,41 +38,7 @@ namespace LensPop
         bool _dragging;
         Point _start;
         Rectangle _sel;
-
-        [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);
-        [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
-        [DllImport("gdi32.dll")] static extern int GetDeviceCaps(IntPtr hdc, int index);
-
-        const int DESKTOPHORZRES = 118;
-        const int DESKTOPVERTRES = 117;
-
-        static Size PhysicalScreen()
-        {
-            try
-            {
-                IntPtr dc = GetDC(IntPtr.Zero);
-                int w = GetDeviceCaps(dc, DESKTOPHORZRES);
-                int h = GetDeviceCaps(dc, DESKTOPVERTRES);
-                ReleaseDC(IntPtr.Zero, dc);
-                if (w > 0 && h > 0) return new Size(w, h);
-            }
-            catch { }
-            return Size.Empty;
-        }
-
-        static int AppliedDpi()
-        {
-            try
-            {
-                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop\WindowMetrics"))
-                {
-                    object v = k == null ? null : k.GetValue("AppliedDPI");
-                    if (v != null) return Convert.ToInt32(v);
-                }
-            }
-            catch { }
-            return 96;
-        }
+        Rectangle _hover = Rectangle.Empty;
 
         public CaptureForm(Action<Bitmap, Point> done)
         {
@@ -71,22 +54,32 @@ namespace LensPop
 
             _bounds = SystemInformation.VirtualScreen;
 
-            // 本进程 DPI 不感知时，屏幕坐标是「虚拟」的；系统若不帮我们放大窗口，遮罩会只盖左上角
             int ownDpi = 96;
             try { using (var g = Graphics.FromHwnd(IntPtr.Zero)) ownDpi = (int)g.DpiX; }
             catch { }
             if (ownDpi <= 96)
             {
                 Size phys = PhysicalScreen();
-                if (phys.Width > _bounds.Width + 8 || phys.Height > _bounds.Height + 8)
-                    _physical = phys;
+                if (phys.Width > _bounds.Width + 8 || phys.Height > _bounds.Height + 8) _physical = phys;
             }
-            Program.LogLine("遮罩初始化 虚拟=" + _bounds + " 物理=" + (_physical.IsEmpty ? "同虚拟" : _physical.ToString()) + " ownDpi=" + ownDpi);
 
             Bounds = _bounds;
             Grab();
-
             Shown += delegate { AdaptToPhysicalScreen(); };
+        }
+
+        static Size PhysicalScreen()
+        {
+            try
+            {
+                IntPtr dc = GetDC(IntPtr.Zero);
+                int w = GetDeviceCaps(dc, DESKTOPHORZRES);
+                int h = GetDeviceCaps(dc, DESKTOPVERTRES);
+                ReleaseDC(IntPtr.Zero, dc);
+                if (w > 0 && h > 0) return new Size(w, h);
+            }
+            catch { }
+            return Size.Empty;
         }
 
         void Grab()
@@ -104,38 +97,48 @@ namespace LensPop
             {
                 RECT r;
                 if (!GetWindowRect(Handle, out r)) return;
-                int w = r.Right - r.Left;
-                Program.LogLine("遮罩窗口实际=" + w + "x" + (r.Bottom - r.Top) + " 目标=" + _physical.Width + "x" + _physical.Height);
-                if (w >= _physical.Width - 8) return;   // 系统已经按 DPI 放大过，不用管
-
+                if (r.Right - r.Left >= _physical.Width - 8) return;
                 _bounds = new Rectangle(0, 0, _physical.Width, _physical.Height);
                 Bounds = _bounds;
-                RECT r2; if (GetWindowRect(Handle, out r2)) Program.LogLine("遮罩调整后=" + (r2.Right - r2.Left) + "x" + (r2.Bottom - r2.Top));
                 Grab();
                 Invalidate();
             }
             catch { }
         }
 
-        const int WM_GETMINMAXINFO = 0x0024;
-
-        // 进程 DPI 不感知时，Windows 会把窗口最大尺寸限制在虚拟屏幕大小；这里放开到物理分辨率
-        protected override void WndProc(ref Message m)
+        /// <summary>鼠标下的顶层窗口矩形（换算到客户区）；探测时先把自己设成穿透，避免只探到遮罩</summary>
+        Rectangle WindowRectAt(Point clientPt)
         {
-            if (m.Msg == WM_GETMINMAXINFO && _physical.Width > 0)
+            try
             {
-                try
+                int ex = GetWindowLong(Handle, GWL_EXSTYLE);
+                SetWindowLong(Handle, GWL_EXSTYLE, ex | WS_EX_TRANSPARENT);
+                var sp = new POINT();
+                sp.X = _bounds.Left + clientPt.X;
+                sp.Y = _bounds.Top + clientPt.Y;
+                IntPtr hwnd = WindowFromPoint(sp);
+                SetWindowLong(Handle, GWL_EXSTYLE, ex);
+
+                if (hwnd == IntPtr.Zero || hwnd == Handle) return Rectangle.Empty;
+                IntPtr root = GetAncestor(hwnd, GA_ROOT);
+                if (root == IntPtr.Zero || root == Handle) return Rectangle.Empty;
+
+                RECT r;
+                if (DwmGetWindowAttribute(root, DWMWA_EXTENDED_FRAME_BOUNDS, out r, Marshal.SizeOf(typeof(RECT))) != 0)
                 {
-                    // MINMAXINFO: ptReserved(0), ptMaxSize(8), ptMaxPosition(16), ptMinTrackSize(24), ptMaxTrackSize(32)
-                    int[] buf = new int[10];
-                    System.Runtime.InteropServices.Marshal.Copy(m.LParam, buf, 0, 10);
-                    buf[8] = _physical.Width;
-                    buf[9] = _physical.Height;
-                    System.Runtime.InteropServices.Marshal.Copy(buf, 0, m.LParam, 10);
+                    if (!GetWindowRect(root, out r)) return Rectangle.Empty;
                 }
-                catch { }
+                int w = r.Right - r.Left;
+                int h = r.Bottom - r.Top;
+                if (w < 24 || h < 24) return Rectangle.Empty;
+                if (w >= _bounds.Width && h >= _bounds.Height) return Rectangle.Empty;
+
+                var rect = new Rectangle(r.Left - _bounds.Left, r.Top - _bounds.Top, w, h);
+                rect.Intersect(new Rectangle(0, 0, ClientSize.Width, ClientSize.Height));
+                if (rect.Width < 24 || rect.Height < 24) return Rectangle.Empty;
+                return rect;
             }
-            base.WndProc(ref m);
+            catch { return Rectangle.Empty; }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -145,17 +148,18 @@ namespace LensPop
             using (var dim = new SolidBrush(Color.FromArgb(120, 0, 0, 0)))
                 g.FillRectangle(dim, ClientRectangle);
 
-            if (_sel.Width > 0 && _sel.Height > 0)
+            var showRect = (_sel.Width > 0 && _sel.Height > 0) ? _sel : (_dragging ? Rectangle.Empty : _hover);
+            if (showRect.Width > 8 && showRect.Height > 8)
             {
-                g.DrawImage(_screen, _sel, _sel, GraphicsUnit.Pixel);
+                g.DrawImage(_screen, showRect, showRect, GraphicsUnit.Pixel);
                 using (var pen = new Pen(Color.FromArgb(79, 70, 229), 2))
-                    g.DrawRectangle(pen, _sel.Left, _sel.Top, _sel.Width, _sel.Height);
-                string label = _sel.Width + " × " + _sel.Height;
+                    g.DrawRectangle(pen, showRect.Left, showRect.Top, showRect.Width - 1, showRect.Height - 1);
+                string label = showRect.Width + " × " + showRect.Height;
                 var f = Theme.UISmall;
                 using (var b = new SolidBrush(Color.FromArgb(16, 19, 26)))
                 {
                     SizeF sz = g.MeasureString(label, f);
-                    var r = new RectangleF(_sel.Left, Math.Max(0, _sel.Top - sz.Height - 6), sz.Width + 12, sz.Height + 4);
+                    var r = new RectangleF(showRect.Left, Math.Max(0, showRect.Top - sz.Height - 6), sz.Width + 12, sz.Height + 4);
                     g.FillRectangle(b, r);
                     g.DrawString(label, f, Brushes.White, r.X + 6, r.Y + 2);
                 }
@@ -165,20 +169,11 @@ namespace LensPop
                 using (var f = new Font("Microsoft YaHei UI", 12f))
                 using (var b = new SolidBrush(Color.FromArgb(220, 255, 255, 255)))
                 {
-                    string tip = "拖动框选区域 · Esc 取消";
+                    string tip = "拖动框选区域 · 单击吸附窗口 · Esc 取消";
                     SizeF sz = g.MeasureString(tip, f);
                     g.DrawString(tip, f, b, (ClientSize.Width - sz.Width) / 2, 60);
                 }
             }
-        }
-
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            _dragging = true;
-            _start = e.Location;
-            _sel = new Rectangle(e.Location, Size.Empty);
-            Invalidate();
-            base.OnMouseDown(e);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -190,27 +185,51 @@ namespace LensPop
                 _sel = new Rectangle(x, y, Math.Abs(e.X - _start.X), Math.Abs(e.Y - _start.Y));
                 Invalidate();
             }
+            else
+            {
+                var r = WindowRectAt(e.Location);
+                if (r != _hover)
+                {
+                    _hover = r;
+                    Invalidate();
+                }
+            }
             base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            _dragging = true;
+            _start = e.Location;
+            _sel = new Rectangle(e.Location, Size.Empty);
+            Invalidate();
+            base.OnMouseDown(e);
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
             _dragging = false;
-            if (_sel.Width < 8 || _sel.Height < 8)
+            var target = _sel;
+            if (target.Width < 8 || target.Height < 8)
             {
-                Close();
-                return;
+                target = WindowRectAt(e.Location);
+                if (target.Width < 8 || target.Height < 8)
+                {
+                    Close();
+                    return;
+                }
             }
+
             Bitmap crop = null;
             try
             {
-                crop = new Bitmap(_sel.Width, _sel.Height);
+                crop = new Bitmap(target.Width, target.Height);
                 using (var g = Graphics.FromImage(crop))
-                    g.DrawImage(_screen, new Rectangle(0, 0, _sel.Width, _sel.Height), _sel, GraphicsUnit.Pixel);
+                    g.DrawImage(_screen, new Rectangle(0, 0, target.Width, target.Height), target, GraphicsUnit.Pixel);
             }
             catch { crop = null; }
 
-            Point at = new Point(_bounds.Left + _sel.Left, _bounds.Top + _sel.Top);
+            Point at = new Point(_bounds.Left + target.Left, _bounds.Top + target.Top);
             Close();
             if (crop != null && _done != null) _done(crop, at);
         }

@@ -41,6 +41,7 @@ if not exist dist mkdir dist
   src\HtmlDoc.cs ^
   src\AskDialog.cs ^
   src\KeyCapture.cs ^
+  src\Toast.cs ^
   src\UiaGrab.cs ^
   src\MainForm.cs ^
   src\MouseHook.cs ^
